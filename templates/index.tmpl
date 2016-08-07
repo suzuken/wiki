@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ .title }}</title>
+</head>
+<body>
+    <header>
+        <h1>go-wiki</h1>
+    </header>
+    <nav>
+        <a href="/">HOME</a> |
+        <a href="/new">NEW</a>
+    </nav>
+    <article>
+        <header>
+            <h2>latest articles</h2>
+        </header>
+        <ul>
+        {{range .articles}}
+            <li>
+                <a href="/article/{{.ID}}">{{ .Title }}</a>
+                <p>posted on {{ .Created }}</p>
+                <p>updated {{ .Updated }}</p>
+            </li>
+        {{end}}
+        </ul>
+    </article>
+    <aside>
+        <h2></h2>
+    </aside>
+    <footer>
+        <p>wiki created by <a href="https://github.com/suzuken">@suzuken</a></p>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# gorpの関係でMySQLだとparseTimeを有効にする必要がある
+# time.Timeのserialize/deserializeのため
+#
+# see: https://github.com/rubenv/sql-migrate/issues/2
+#
+# プレースホルダ置換を有効にするためにinterpolateParams=trueを指定しておく
+#
+# see: https://github.com/go-sql-driver/mysql/pull/309
+# see: http://dsas.blog.klab.org/archives/52191467.html
+development:
+  dialect: mysql
+  datasource: root:password@tcp(localhost:3306)/wiki?parseTime=true&collation=utf8_general_ci&interpolateParams=true
+  dir: migrations
+
+test:
+  dialect: mysql
+  datasource: root:password@tcp(localhost:3306)/test-wiki?parseTime=true&collation=utf8_general_ci&interpolateParams=true
+  dir: migrations
