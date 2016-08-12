@@ -11,12 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Article はArticleへのリクエストに関する制御をします
+// Article is controller for requests to articles.
 type Article struct {
 	DB *sql.DB
 }
 
-// 一覧を取得して表示します
+// Root indicates / path as top page.
 func (t *Article) Root(c *gin.Context) {
 	articles, err := model.ArticlesAll(t.DB)
 	if err != nil {
@@ -29,6 +29,7 @@ func (t *Article) Root(c *gin.Context) {
 	})
 }
 
+// Get returns specified article.
 func (t *Article) Get(c *gin.Context) {
 	id := c.Param("id")
 	aid, err := strconv.ParseInt(id, 10, 64)
@@ -47,6 +48,7 @@ func (t *Article) Get(c *gin.Context) {
 	})
 }
 
+// Edit indicates edit page for certain article.
 func (t *Article) Edit(c *gin.Context) {
 	id := c.Param("id")
 	aid, err := strconv.ParseInt(id, 10, 64)
@@ -65,6 +67,8 @@ func (t *Article) Edit(c *gin.Context) {
 	})
 }
 
+// New works as endpoint to create new article.
+// If successed, redirect to created one.
 func (t *Article) New(c *gin.Context, m *model.Article) {
 	var id int64
 	TXHandler(c, t.DB, func(tx *sql.Tx) error {
@@ -81,6 +85,8 @@ func (t *Article) New(c *gin.Context, m *model.Article) {
 	c.Redirect(301, fmt.Sprintf("/article/%d", id))
 }
 
+// Update works for updating the specified article.
+// After updating, redirect to one.
 func (t *Article) Update(c *gin.Context, m *model.Article) {
 	TXHandler(c, t.DB, func(tx *sql.Tx) error {
 		if _, err := m.Update(tx); err != nil {
@@ -91,6 +97,9 @@ func (t *Article) Update(c *gin.Context, m *model.Article) {
 	c.Redirect(301, fmt.Sprintf("/article/%d", m.ID))
 }
 
+// Save is endpoint for updating or creating documents.
+// This accepts form request from browser.
+// If id is specified, dealing with Update.
 func (t *Article) Save(c *gin.Context) {
 	var article model.Article
 	article.Body = c.PostForm("body")
@@ -111,6 +120,7 @@ func (t *Article) Save(c *gin.Context) {
 	t.Update(c, &article)
 }
 
+// Delete is endpont for deleting the document.
 func (t *Article) Delete(c *gin.Context) {
 	var article model.Article
 	id := c.PostForm("id")

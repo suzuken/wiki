@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// TXHandler is handler for working with transaction.
+// This is wrapper function for commit and rollback.
 func TXHandler(c *gin.Context, db *sql.DB, f func(*sql.Tx) error) {
 	tx, err := db.Begin()
 	if err != nil {

@@ -10,17 +10,23 @@ import (
 	"github.com/suzuken/wiki/db"
 
 	"github.com/gin-gonic/gin"
+	_ "github.com/go-sql-driver/mysql"
 )
 
+// Server is whole server implementation for this wiki app.
+// This holds database connection and router settings based on gin.
 type Server struct {
 	db     *sql.DB
 	Engine *gin.Engine
 }
 
+// Close makes the database connection to close.
 func (s *Server) Close() error {
 	return s.db.Close()
 }
 
+// Init initialize server state. Connecting to database, compiling templates,
+// and settings router.
 func (s *Server) Init(dbconf, env string) {
 	cs, err := db.NewConfigsFromFile(dbconf)
 	if err != nil {
@@ -35,15 +41,18 @@ func (s *Server) Init(dbconf, env string) {
 	s.Route()
 }
 
+// New returns server object.
 func New() *Server {
 	r := gin.Default()
 	return &Server{Engine: r}
 }
 
+// Run starts running http server.
 func (s *Server) Run(addr ...string) {
 	s.Engine.Run(addr...)
 }
 
+// Route setting router for this wiki.
 func (s *Server) Route() {
 	article := &controller.Article{DB: s.db}
 

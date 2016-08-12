@@ -6,14 +6,13 @@ import (
 	"io/ioutil"
 	"os"
 
-	_ "github.com/go-sql-driver/mysql"
 	"gopkg.in/yaml.v1"
 )
 
-// Configsは環境ごとの設定情報をもつ
+// Configs have configuration for each environment.
 type Configs map[string]*Config
 
-// Openは指定された環境についてDBに接続します。
+// Open creates connection between database for each environment.
 func (cs Configs) Open(env string) (*sql.DB, error) {
 	config, ok := cs[env]
 	if !ok {
@@ -22,23 +21,26 @@ func (cs Configs) Open(env string) (*sql.DB, error) {
 	return config.Open()
 }
 
-// Configはsql-migrateの設定ファイルと同じ形式を想定している
+// Config is a database configuration.
+// It's save as sql-migrate schema style.
+//
+// see also: https://github.com/rubenv/sql-migrate
 type Config struct {
 	Datasource string `yaml:"datasource"`
 }
 
-// DSNは設定されているDSNを返します
+// DSN returns data source name configured.
 func (c *Config) DSN() string {
 	return c.Datasource
 }
 
-// OpenはConfigで指定されている接続先に接続する。
-// MySQL固定
+// Open connets database.
+// NOTE: supports mysql only.
 func (c *Config) Open() (*sql.DB, error) {
 	return sql.Open("mysql", c.DSN())
 }
 
-// NewConfigsFromFileはConfigから設定を読み取る
+// NewConfigsFromFile reads settings from file.
 func NewConfigsFromFile(path string) (Configs, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -48,7 +50,7 @@ func NewConfigsFromFile(path string) (Configs, error) {
 	return NewConfigs(f)
 }
 
-// NewConfigsはio.ReaderからDB用設定を読み取る
+// NewConfigs reads configs from io.Reader.
 func NewConfigs(r io.Reader) (Configs, error) {
 	b, err := ioutil.ReadAll(r)
 	if err != nil {
