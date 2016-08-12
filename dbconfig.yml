@@ -1,9 +1,10 @@
-# gorpの関係でMySQLだとparseTimeを有効にする必要がある
-# time.Timeのserialize/deserializeのため
+# Example Database Configurationgorp
+#
+# For using gorp, enable parseTime option on MySQL to serialize/deserialize time.Time.
 #
 # see: https://github.com/rubenv/sql-migrate/issues/2
 #
-# プレースホルダ置換を有効にするためにinterpolateParams=trueを指定しておく
+# Also interpolateParams=true, to replace placement on database server.
 #
 # see: https://github.com/go-sql-driver/mysql/pull/309
 # see: http://dsas.blog.klab.org/archives/52191467.html
