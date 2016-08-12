@@ -66,6 +66,17 @@ func (s *Server) Route() {
 	s.Engine.GET("/article/:id/edit", article.Edit)
 	s.Engine.POST("/save", article.Save)
 	s.Engine.POST("/delete", article.Delete)
+
+	user := &controller.User{DB: s.db}
+	s.Engine.GET("/signup", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "signup.tmpl", gin.H{})
+	})
+	s.Engine.POST("/signup", user.SignUp)
+	s.Engine.GET("/login", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "login.tmpl", gin.H{})
+	})
+	s.Engine.POST("/login", user.Login)
+
 	s.Engine.Static("/static", "static")
 }
 

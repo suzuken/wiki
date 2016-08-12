@@ -4,6 +4,46 @@ package model
 
 import "database/sql"
 
+func ScanUser(r *sql.Row) (User, error) {
+	var s User
+	if err := r.Scan(
+		&s.ID,
+		&s.Email,
+		&s.Name,
+		&s.Salt,
+		&s.Salted,
+		&s.Created,
+		&s.Updated,
+	); err != nil {
+		return User{}, err
+	}
+	return s, nil
+}
+
+func ScanUsers(rs *sql.Rows) ([]User, error) {
+	structs := make([]User, 0, 16)
+	var err error
+	for rs.Next() {
+		var s User
+		if err = rs.Scan(
+			&s.ID,
+			&s.Email,
+			&s.Name,
+			&s.Salt,
+			&s.Salted,
+			&s.Created,
+			&s.Updated,
+		); err != nil {
+			return nil, err
+		}
+		structs = append(structs, s)
+	}
+	if err = rs.Err(); err != nil {
+		return nil, err
+	}
+	return structs, nil
+}
+
 func ScanArticle(r *sql.Row) (Article, error) {
 	var s Article
 	if err := r.Scan(

@@ -13,6 +13,7 @@ func TXHandler(c *gin.Context, db *sql.DB, f func(*sql.Tx) error) {
 	tx, err := db.Begin()
 	if err != nil {
 		c.JSON(500, gin.H{"err": "start transaction failed"})
+		c.Abort()
 		return
 	}
 	defer func() {
@@ -23,7 +24,9 @@ func TXHandler(c *gin.Context, db *sql.DB, f func(*sql.Tx) error) {
 		}
 	}()
 	if err := f(tx); err != nil {
+		log.Printf("operation failed: %s", err)
 		c.JSON(500, gin.H{"err": "operation failed"})
+		c.Abort()
 		return
 	}
 }

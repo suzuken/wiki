@@ -1,20 +1,6 @@
-//go:generate scaneo $GOFILE
-
 package model
 
-import (
-	"database/sql"
-	"time"
-)
-
-// Article returns model object for article.
-type Article struct {
-	ID      int64      `json:"id"`
-	Title   string     `json:"title"`
-	Body    string     `json:"body"`
-	Created *time.Time `json:"created"`
-	Updated *time.Time `json:"updated"`
-}
+import "database/sql"
 
 // ArticlesAll returns all articles.
 func ArticlesAll(db *sql.DB) ([]Article, error) {
