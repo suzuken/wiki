@@ -1,13 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>login - go-wiki</title>
-</head>
+{{ template "header" . }}
 <body>
     <header>
         <h1>Login</h1>
     </header>
+    {{ template "global-navigator" . }}
     <article>
         <form action="/login" method="POST">
             <label for="email">email</label>
@@ -17,8 +15,6 @@
             <input type="submit" value="login">
         </form>
     </article>
-    <footer>
-        <p>wiki created by <a href="https://github.com/suzuken">@suzuken</a></p>
-    </footer>
+    {{ template "footer" .}}
 </body>
 </html>

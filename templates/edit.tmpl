@@ -1,17 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>{{ .title }}</title>
-</head>
+{{ template "header" . }}
 <body>
     <header>
         <h1>Edit Article: go-wiki</h1>
     </header>
-    <nav>
-        <a href="/">HOME</a> |
-        <a href="/">LATEST</a>
-    </nav>
+    {{ template "global-navigator" . }}
     <article>
         <form action="/save" method="POST">
             <input type="hidden" name="id" value="{{.article.ID}}">
@@ -27,8 +21,6 @@
     <aside>
         <h2></h2>
     </aside>
-    <footer>
-        <p>wiki created by <a href="https://github.com/suzuken">@suzuken</a></p>
-    </footer>
+    {{ template "footer" .}}
 </body>
 </html>
