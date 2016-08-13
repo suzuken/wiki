@@ -8,9 +8,13 @@
 {{ define "global-navigator" }}
 <nav>
     <a href="/">HOME</a> |
-    <a href="/new">NEW</a> |
+    {{ if LoggedIn .context}}
+    <a href="/new">NEW ARTICLE</a> |
+    <a href="/logout">LOG OUT</a>
+    {{else}}
     <a href="/signup">SIGN UP</a> |
     <a href="/login">LOGIN</a>
+    {{end}}
 </nav>
 {{end}}
 

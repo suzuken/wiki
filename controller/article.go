@@ -26,6 +26,7 @@ func (t *Article) Root(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.tmpl", gin.H{
 		"title":    "wiki wiki",
 		"articles": articles,
+		"context":  c,
 	})
 }
 
@@ -45,6 +46,7 @@ func (t *Article) Get(c *gin.Context) {
 	c.HTML(http.StatusOK, "article.tmpl", gin.H{
 		"title":   fmt.Sprintf("%s - go-wiki", article.Title),
 		"article": article,
+		"context": c,
 	})
 }
 
@@ -64,6 +66,7 @@ func (t *Article) Edit(c *gin.Context) {
 	c.HTML(http.StatusOK, "edit.tmpl", gin.H{
 		"title":   fmt.Sprintf("%s - go-wiki", article.Title),
 		"article": article,
+		"context": c,
 	})
 }
 

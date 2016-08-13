@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"flag"
+	"html/template"
 	"log"
 	"net/http"
 
@@ -38,7 +39,12 @@ func (s *Server) Init(dbconf, env string) {
 		log.Fatalf("db initialization failed: %s", err)
 	}
 	s.db = db
-	s.Engine.LoadHTMLGlob("templates/*")
+
+	// NOTE: define helper func to use from templates here.
+	t := template.Must(template.New("").Funcs(template.FuncMap{
+		"LoggedIn": controller.LoggedIn,
+	}).ParseGlob("templates/*"))
+	s.Engine.SetHTMLTemplate(t)
 
 	store := sessions.NewCookieStore([]byte("secretkey"))
 	s.Engine.Use(sessions.Sessions("wikisession", store))
@@ -80,6 +86,7 @@ func (s *Server) Route() {
 		c.HTML(http.StatusOK, "login.tmpl", gin.H{})
 	})
 	s.Engine.POST("/login", user.Login)
+	s.Engine.GET("/logout", user.Logout)
 
 	s.Engine.Static("/static", "static")
 }

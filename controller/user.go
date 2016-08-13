@@ -39,7 +39,6 @@ func (u *User) SignUp(c *gin.Context) {
 		return tx.Commit()
 	})
 
-	// TODO should be login state here
 	c.Redirect(301, "/")
 }
 
@@ -71,4 +70,13 @@ func (u *User) Logout(c *gin.Context) {
 	sess.Save()
 
 	c.Redirect(301, "/")
+}
+
+// LoggedIn returns if current session user is logged in or not.
+func LoggedIn(c *gin.Context) bool {
+	if c == nil {
+		return false
+	}
+	sess := sessions.Default(c)
+	return sess.Get("uid") != nil && sess.Get("name") != nil && sess.Get("email") != nil
 }
