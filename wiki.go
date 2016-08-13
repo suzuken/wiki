@@ -9,6 +9,7 @@ import (
 	"github.com/suzuken/wiki/controller"
 	"github.com/suzuken/wiki/db"
 
+	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -38,6 +39,9 @@ func (s *Server) Init(dbconf, env string) {
 	}
 	s.db = db
 	s.Engine.LoadHTMLGlob("templates/*")
+
+	store := sessions.NewCookieStore([]byte("secretkey"))
+	s.Engine.Use(sessions.Sessions("wikisession", store))
 	s.Route()
 }
 

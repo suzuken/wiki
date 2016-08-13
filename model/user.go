@@ -3,6 +3,7 @@ package model
 import "database/sql"
 import "errors"
 
+// ErrPasswordUnmatch is error for password unmatch when logging in.
 var ErrPasswordUnmatch = errors.New("password unmatch")
 
 // UserOne returns the user for given id
@@ -14,6 +15,15 @@ func UserOne(db *sql.DB, id int64) (User, error) {
 // Email is unique key.
 func UserByEmail(db *sql.DB, email string) (User, error) {
 	return ScanUser(db.QueryRow(`select * from users where email = ?`, email))
+}
+
+// UserExists check if user is exists by given email.
+func UserExists(db *sql.DB, email string) (bool, error) {
+	var count int64
+	if err := db.QueryRow(`select count(*) as count from users where email = ?`, email).Scan(&count); err != nil {
+		return false, err
+	}
+	return count == 1, nil
 }
 
 // Update updates user by given user.
