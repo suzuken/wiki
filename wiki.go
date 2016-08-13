@@ -65,19 +65,30 @@ func (s *Server) Run(addr ...string) {
 // Route setting router for this wiki.
 func (s *Server) Route() {
 	article := &controller.Article{DB: s.db}
+	user := &controller.User{DB: s.db}
+
+	auth := s.Engine.Group("/")
+	auth.Use(controller.AuthRequired())
+	{
+		auth.GET("/authtest", func(c *gin.Context) {
+			c.String(200, "you're authed")
+		})
+		auth.GET("/new", func(c *gin.Context) {
+			c.HTML(200, "new.tmpl", gin.H{
+				"title": "New: go-wiki",
+			})
+		})
+		auth.GET("/article/:id/edit", article.Edit)
+		auth.POST("/save", article.Save)
+		auth.POST("/delete", article.Delete)
+		auth.GET("/logout", func(c *gin.Context) {
+			c.HTML(http.StatusOK, "logout.tmpl", gin.H{})
+		})
+		auth.POST("/logout", user.Logout)
+	}
 
 	s.Engine.GET("/", article.Root)
 	s.Engine.GET("/article/:id", article.Get)
-	s.Engine.GET("/new", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "new.tmpl", gin.H{
-			"title": "New: go-wiki",
-		})
-	})
-	s.Engine.GET("/article/:id/edit", article.Edit)
-	s.Engine.POST("/save", article.Save)
-	s.Engine.POST("/delete", article.Delete)
-
-	user := &controller.User{DB: s.db}
 	s.Engine.GET("/signup", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "signup.tmpl", gin.H{})
 	})
@@ -86,7 +97,6 @@ func (s *Server) Route() {
 		c.HTML(http.StatusOK, "login.tmpl", gin.H{})
 	})
 	s.Engine.POST("/login", user.Login)
-	s.Engine.GET("/logout", user.Logout)
 
 	s.Engine.Static("/static", "static")
 }

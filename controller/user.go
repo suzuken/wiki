@@ -3,6 +3,8 @@ package controller
 import (
 	"database/sql"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -69,6 +71,14 @@ func (u *User) Logout(c *gin.Context) {
 	sess.Clear()
 	sess.Save()
 
+	// clear cookie
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:    "wikisession",
+		Value:   "",
+		Path:    "/",
+		Expires: time.Now().AddDate(0, -1, 0),
+	})
+
 	c.Redirect(301, "/")
 }
 
@@ -79,4 +89,14 @@ func LoggedIn(c *gin.Context) bool {
 	}
 	sess := sessions.Default(c)
 	return sess.Get("uid") != nil && sess.Get("name") != nil && sess.Get("email") != nil
+}
+
+// AuthRequired returns a handler function which checks
+// if user logged in or not.
+func AuthRequired() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !LoggedIn(c) {
+			c.AbortWithStatus(401)
+		}
+	}
 }
