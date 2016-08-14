@@ -8,6 +8,7 @@
     {{ template "global-navigator" . }}
     <article>
         <form action="/logout" method="POST">
+            {{ template "csrf-hidden" . }}
             <input type="submit" value="logout">
         </form>
     </article>

@@ -53,7 +53,7 @@ func (u *User) Login(c *gin.Context) {
 		return
 	}
 
-	log.Printf("authed: %v", m)
+	log.Printf("authed: %#v", m)
 
 	sess := sessions.Default(c)
 	sess.Set("uid", m.ID)
@@ -89,6 +89,14 @@ func LoggedIn(c *gin.Context) bool {
 	}
 	sess := sessions.Default(c)
 	return sess.Get("uid") != nil && sess.Get("name") != nil && sess.Get("email") != nil
+}
+
+// CurrentName returns current user name who logged in.
+func CurrentName(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	return sessions.Default(c).Get("name").(string)
 }
 
 // AuthRequired returns a handler function which checks

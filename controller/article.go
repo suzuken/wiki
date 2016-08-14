@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/suzuken/wiki/model"
+	csrf "github.com/utrack/gin-csrf"
 
 	"github.com/gin-gonic/gin"
 )
@@ -67,6 +68,7 @@ func (t *Article) Edit(c *gin.Context) {
 		"title":   fmt.Sprintf("%s - go-wiki", article.Title),
 		"article": article,
 		"context": c,
+		"csrf":    csrf.GetToken(c),
 	})
 }
 

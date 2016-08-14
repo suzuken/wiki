@@ -8,8 +8,8 @@ func ScanUser(r *sql.Row) (User, error) {
 	var s User
 	if err := r.Scan(
 		&s.ID,
-		&s.Email,
 		&s.Name,
+		&s.Email,
 		&s.Salt,
 		&s.Salted,
 		&s.Created,
@@ -27,8 +27,8 @@ func ScanUsers(rs *sql.Rows) ([]User, error) {
 		var s User
 		if err = rs.Scan(
 			&s.ID,
-			&s.Email,
 			&s.Name,
+			&s.Email,
 			&s.Salt,
 			&s.Salted,
 			&s.Created,

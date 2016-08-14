@@ -8,6 +8,7 @@
     {{ template "global-navigator" . }}
     <article>
         <form action="/signup" method="POST">
+            {{ template "csrf-hidden" . }}
             <label for="email">email</label>
             <input type="text" name="email" value="">
             <label for="name">name</label>

@@ -8,6 +8,7 @@
     {{ template "global-navigator" . }}
     <article>
         <form action="/save" method="POST">
+            {{ template "csrf-hidden" . }}
             <input type="text" name="title">
             <textarea id="" name="body" cols="30" rows="10">
             </textarea>

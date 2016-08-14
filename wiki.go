@@ -10,6 +10,8 @@ import (
 	"github.com/suzuken/wiki/controller"
 	"github.com/suzuken/wiki/db"
 
+	csrf "github.com/utrack/gin-csrf"
+
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
@@ -42,12 +44,21 @@ func (s *Server) Init(dbconf, env string) {
 
 	// NOTE: define helper func to use from templates here.
 	t := template.Must(template.New("").Funcs(template.FuncMap{
-		"LoggedIn": controller.LoggedIn,
+		"LoggedIn":    controller.LoggedIn,
+		"CurrentName": controller.CurrentName,
 	}).ParseGlob("templates/*"))
 	s.Engine.SetHTMLTemplate(t)
 
 	store := sessions.NewCookieStore([]byte("secretkey"))
 	s.Engine.Use(sessions.Sessions("wikisession", store))
+	s.Engine.Use(csrf.Middleware(csrf.Options{
+		Secret: "secretkey",
+		ErrorFunc: func(c *gin.Context) {
+			c.String(400, "CSRF token mismach")
+			c.Abort()
+		},
+	}))
+
 	s.Route()
 }
 
@@ -75,14 +86,19 @@ func (s *Server) Route() {
 		})
 		auth.GET("/new", func(c *gin.Context) {
 			c.HTML(200, "new.tmpl", gin.H{
-				"title": "New: go-wiki",
+				"title":   "New: go-wiki",
+				"csrf":    csrf.GetToken(c),
+				"context": c,
 			})
 		})
 		auth.GET("/article/:id/edit", article.Edit)
 		auth.POST("/save", article.Save)
 		auth.POST("/delete", article.Delete)
 		auth.GET("/logout", func(c *gin.Context) {
-			c.HTML(http.StatusOK, "logout.tmpl", gin.H{})
+			c.HTML(http.StatusOK, "logout.tmpl", gin.H{
+				"csrf":    csrf.GetToken(c),
+				"context": c,
+			})
 		})
 		auth.POST("/logout", user.Logout)
 	}
@@ -90,11 +106,15 @@ func (s *Server) Route() {
 	s.Engine.GET("/", article.Root)
 	s.Engine.GET("/article/:id", article.Get)
 	s.Engine.GET("/signup", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "signup.tmpl", gin.H{})
+		c.HTML(http.StatusOK, "signup.tmpl", gin.H{
+			"csrf": csrf.GetToken(c),
+		})
 	})
 	s.Engine.POST("/signup", user.SignUp)
 	s.Engine.GET("/login", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "login.tmpl", gin.H{})
+		c.HTML(http.StatusOK, "login.tmpl", gin.H{
+			"csrf": csrf.GetToken(c),
+		})
 	})
 	s.Engine.POST("/login", user.Login)
 
