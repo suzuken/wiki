@@ -15,6 +15,7 @@
             <input type="submit" value="save">
         </form>
         <form action="/delete" method="POST">
+            {{ template "csrf-hidden" . }}
             <input type="hidden" name="id" value="{{.article.ID}}">
             <input type="submit" value="delete">
         </form>
