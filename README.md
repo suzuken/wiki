@@ -20,14 +20,14 @@ or
 
 ### Generate Scans
 
-Using [scaneo](github.com/variadico/scaneo). Simply,
+Using [scaneo](https://github.com/variadico/scaneo). Simply,
 
     # edit models, and
     make gen
 
 ### DB
 
-Use docker container. For database migration, [sql-migrate](github.com/rubenv/sql-migrate)
+Use docker container. For database migration, [sql-migrate](https://github.com/rubenv/sql-migrate)
 
     # do it first
     make migrate/init
