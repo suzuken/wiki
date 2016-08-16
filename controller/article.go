@@ -45,10 +45,11 @@ func (t *Article) Get(c *gin.Context) {
 		return
 	}
 	c.HTML(http.StatusOK, "article.tmpl", gin.H{
-		"title":   fmt.Sprintf("%s - go-wiki", article.Title),
-		"article": article,
-		"csrf":    csrf.GetToken(c),
-		"context": c,
+		"title":    fmt.Sprintf("%s - go-wiki", article.Title),
+		"article":  article,
+		"csrf":     csrf.GetToken(c),
+		"context":  c,
+		"comments": []string{"aaa", "bbb"},
 	})
 }
 

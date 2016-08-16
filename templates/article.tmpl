@@ -18,8 +18,9 @@
         <p><a href="/article/{{.article.ID}}/edit">edit this</a></p>
         <div id="comments">
             <ul>
-                <li>aaa</li>
-                <li>bbb</li>
+                {{range .comments}}
+                    <li>{{.}}</li>
+                {{end}}
             </ul>
             <form action="/comment" method="POST">
                 {{ template "csrf-hidden" . }}
