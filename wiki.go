@@ -93,6 +93,7 @@ func (s *Server) Route() {
 		})
 		auth.GET("/article/:id/edit", article.Edit)
 		auth.POST("/save", article.Save)
+		auth.POST("/comment", article.Comment)
 		auth.POST("/delete", article.Delete)
 		auth.GET("/logout", func(c *gin.Context) {
 			c.HTML(http.StatusOK, "logout.tmpl", gin.H{
