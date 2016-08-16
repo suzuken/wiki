@@ -12,6 +12,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var comments map[string][]string
+
+func init() {
+	comments = make(map[string][]string, 0)
+}
+
 // Article is controller for requests to articles.
 type Article struct {
 	DB *sql.DB
@@ -49,7 +55,7 @@ func (t *Article) Get(c *gin.Context) {
 		"article":  article,
 		"csrf":     csrf.GetToken(c),
 		"context":  c,
-		"comments": []string{"aaa", "bbb"},
+		"comments": comments[id],
 	})
 }
 
@@ -102,6 +108,13 @@ func (t *Article) Update(c *gin.Context, m *model.Article) {
 		return tx.Commit()
 	})
 	c.Redirect(301, fmt.Sprintf("/article/%d", m.ID))
+}
+
+func (t *Article) Comment(c *gin.Context) {
+	body := c.PostForm("body")
+	id := c.PostForm("id")
+	comments[id] = append(comments[id], body)
+	c.Redirect(301, fmt.Sprintf("/article/%s", id))
 }
 
 // Save is endpoint for updating or creating documents.

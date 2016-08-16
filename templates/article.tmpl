@@ -25,6 +25,7 @@
             <form action="/comment" method="POST">
                 {{ template "csrf-hidden" . }}
                 <input type="text" name="body" value="">
+                <input type="hidden" name="id" value="{{.article.ID}}">
                 <input type="submit" value="save">
             </form>
         </div>
