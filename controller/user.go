@@ -1,13 +1,13 @@
 package controller
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/contrib/sessions"
-	"github.com/gin-gonic/gin"
+	"github.com/gorilla/sessions"
 	"github.com/suzuken/wiki/model"
 )
 
@@ -17,7 +17,7 @@ type User struct {
 }
 
 // SignUp makes user signup.
-func (u *User) SignUp(c *gin.Context) {
+func (u *User) SignUp(c context.Context) {
 	var m model.User
 	m.Name = c.PostForm("name")
 	m.Email = c.PostForm("email")
@@ -83,11 +83,12 @@ func (u *User) Logout(c *gin.Context) {
 }
 
 // LoggedIn returns if current session user is logged in or not.
-func LoggedIn(c *gin.Context) bool {
-	if c == nil {
+func LoggedIn(r *http.Request) bool {
+	if r == nil {
 		return false
 	}
-	sess := sessions.Default(c)
+	re := sessions.GetRegistry(r)
+	re.Get("uid")
 	return sess.Get("uid") != nil && sess.Get("name") != nil && sess.Get("email") != nil
 }
 
@@ -101,10 +102,10 @@ func CurrentName(c *gin.Context) string {
 
 // AuthRequired returns a handler function which checks
 // if user logged in or not.
-func AuthRequired() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if !LoggedIn(c) {
-			c.AbortWithStatus(401)
+func AuthRequired() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !LoggedIn(r) {
+			http.Error(w, "abort", http.StatusUnauthorized)
 		}
 	}
 }

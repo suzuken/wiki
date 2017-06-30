@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"html/template"
@@ -12,16 +13,16 @@ import (
 
 	csrf "github.com/utrack/gin-csrf"
 
-	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/gorilla/sessions"
 )
 
 // Server is whole server implementation for this wiki app.
 // This holds database connection and router settings based on gin.
 type Server struct {
-	db     *sql.DB
-	Engine *gin.Engine
+	db    *sql.DB
+	store sessions.Store
 }
 
 // Close makes the database connection to close.
@@ -47,17 +48,18 @@ func (s *Server) Init(dbconf, env string) {
 		"LoggedIn":    controller.LoggedIn,
 		"CurrentName": controller.CurrentName,
 	}).ParseGlob("templates/*"))
-	s.Engine.SetHTMLTemplate(t)
+	// s.Engine.SetHTMLTemplate(t)
 
-	store := sessions.NewCookieStore([]byte("secretkey"))
-	s.Engine.Use(sessions.Sessions("wikisession", store))
-	s.Engine.Use(csrf.Middleware(csrf.Options{
-		Secret: "secretkey",
-		ErrorFunc: func(c *gin.Context) {
-			c.String(400, "CSRF token mismach")
-			c.Abort()
-		},
-	}))
+	s.store = sessions.NewCookieStore([]byte("secretkey"))
+	s.mux = http.NewServeMux()
+
+	// s.Engine.Use(csrf.Middleware(csrf.Options{
+	// 	Secret: "secretkey",
+	// 	ErrorFunc: func(c *gin.Context) {
+	// 		c.String(400, "CSRF token mismach")
+	// 		c.Abort()
+	// 	},
+	// }))
 
 	s.Route()
 }
