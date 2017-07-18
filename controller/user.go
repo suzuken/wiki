@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gin-gonic/contrib/sessions"
-	"github.com/gin-gonic/gin"
+	"github.com/ipfans/echo-session"
+	"github.com/labstack/echo"
 	"github.com/suzuken/wiki/model"
 )
 
@@ -17,21 +17,19 @@ type User struct {
 }
 
 // SignUp makes user signup.
-func (u *User) SignUp(c *gin.Context) {
+func (u *User) SignUp(c echo.Context) error {
 	var m model.User
-	m.Name = c.PostForm("name")
-	m.Email = c.PostForm("email")
-	password := c.PostForm("password")
+	m.Name = c.FormValue("name")
+	m.Email = c.FormValue("email")
+	password := c.FormValue("password")
 
 	b, err := model.UserExists(u.DB, m.Email)
 	if err != nil {
-		log.Printf("query error: %s", err)
-		c.String(500, "db error")
-		return
+		return err
 	}
 	if b {
 		c.String(200, "given email address is already used.")
-		return
+		return nil
 	}
 
 	TXHandler(c, u.DB, func(tx *sql.Tx) error {
@@ -41,70 +39,70 @@ func (u *User) SignUp(c *gin.Context) {
 		return tx.Commit()
 	})
 
-	c.Redirect(301, "/")
+	return c.Redirect(301, "/")
 }
 
 // Login try login.
-func (u *User) Login(c *gin.Context) {
-	m, err := model.Auth(u.DB, c.PostForm("email"), c.PostForm("password"))
+func (u *User) Login(c echo.Context) error {
+	m, err := model.Auth(u.DB, c.FormValue("email"), c.FormValue("password"))
 	if err != nil {
-		log.Printf("auth failed: %s", err)
-		c.String(500, "can't auth")
-		return
+		return err
 	}
 
 	log.Printf("authed: %#v", m)
 
-	sess := sessions.Default(c)
+	sess := session.Default(c)
 	sess.Set("uid", m.ID)
 	sess.Set("name", m.Name)
 	sess.Set("email", m.Email)
 	sess.Save()
 
-	c.Redirect(301, "/")
+	return c.Redirect(301, "/")
 }
 
 // Logout makes user logged out.
-func (u *User) Logout(c *gin.Context) {
-	sess := sessions.Default(c)
-	sess.Options(sessions.Options{MaxAge: -1})
+func (u *User) Logout(c echo.Context) error {
+	sess := session.Default(c)
+	sess.Options(session.Options{MaxAge: -1})
 	sess.Clear()
 	sess.Save()
 
 	// clear cookie
-	http.SetCookie(c.Writer, &http.Cookie{
+	http.SetCookie(c.Response().Writer, &http.Cookie{
 		Name:    "wikisession",
 		Value:   "",
 		Path:    "/",
 		Expires: time.Now().AddDate(0, -1, 0),
 	})
 
-	c.Redirect(301, "/")
+	return c.Redirect(301, "/")
 }
 
 // LoggedIn returns if current session user is logged in or not.
-func LoggedIn(c *gin.Context) bool {
+func LoggedIn(c echo.Context) bool {
 	if c == nil {
 		return false
 	}
-	sess := sessions.Default(c)
+	sess := session.Default(c)
 	return sess.Get("uid") != nil && sess.Get("name") != nil && sess.Get("email") != nil
 }
 
 // CurrentName returns current user name who logged in.
-func CurrentName(c *gin.Context) string {
+func CurrentName(c echo.Context) string {
 	if c == nil {
 		return ""
 	}
-	return sessions.Default(c).Get("name").(string)
+	return session.Default(c).Get("name").(string)
 }
 
 // AuthRequired returns a handler function which checks
 // if user logged in or not.
-func AuthRequired() gin.HandlerFunc {
-	return func(c *gin.Context) {
+func AuthRequired(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
 		if !LoggedIn(c) {
-			c.AbortWithStatus(401)
+			c.Response().WriteHeader(401)
+			return nil
 		}
+		return next(c)
 	}
 }

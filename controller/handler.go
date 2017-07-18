@@ -4,16 +4,15 @@ import (
 	"database/sql"
 	"log"
 
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo"
 )
 
 // TXHandler is handler for working with transaction.
 // This is wrapper function for commit and rollback.
-func TXHandler(c *gin.Context, db *sql.DB, f func(*sql.Tx) error) {
+func TXHandler(c echo.Context, db *sql.DB, f func(*sql.Tx) error) {
 	tx, err := db.Begin()
 	if err != nil {
-		c.JSON(500, gin.H{"err": "start transaction failed"})
-		c.Abort()
+		c.JSON(500, map[string]string{"err": "start transaction failed"})
 		return
 	}
 	defer func() {
@@ -24,9 +23,8 @@ func TXHandler(c *gin.Context, db *sql.DB, f func(*sql.Tx) error) {
 		}
 	}()
 	if err := f(tx); err != nil {
-		log.Printf("operation failed: %s", err)
-		c.JSON(500, gin.H{"err": "operation failed"})
-		c.Abort()
+		c.Logger().Warnf("operation failed: %s", err)
+		c.JSON(500, map[string]string{"err": "operation failed"})
 		return
 	}
 }
