@@ -4,29 +4,36 @@ import (
 	"database/sql"
 	"flag"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/ipfans/echo-session"
+	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 	"github.com/suzuken/wiki/controller"
 	"github.com/suzuken/wiki/db"
-
-	csrf "github.com/utrack/gin-csrf"
-
-	"github.com/gin-gonic/contrib/sessions"
-	"github.com/gin-gonic/gin"
-	_ "github.com/go-sql-driver/mysql"
 )
 
 // Server is whole server implementation for this wiki app.
-// This holds database connection and router settings based on gin.
+// This holds database connection and router settings based on labstack/echo.
 type Server struct {
 	db     *sql.DB
-	Engine *gin.Engine
+	Engine *echo.Echo
 }
 
 // Close makes the database connection to close.
 func (s *Server) Close() error {
 	return s.db.Close()
+}
+
+type Template struct {
+	templates *template.Template
+}
+
+func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+	return t.templates.ExecuteTemplate(w, name, data)
 }
 
 // Init initialize server state. Connecting to database, compiling templates,
@@ -43,34 +50,32 @@ func (s *Server) Init(dbconf, env string) {
 	s.db = db
 
 	// NOTE: define helper func to use from templates here.
-	t := template.Must(template.New("").Funcs(template.FuncMap{
-		"LoggedIn":    controller.LoggedIn,
-		"CurrentName": controller.CurrentName,
-	}).ParseGlob("templates/*"))
-	s.Engine.SetHTMLTemplate(t)
+	t := &Template{
+		templates: template.Must(template.New("").Funcs(template.FuncMap{
+			"LoggedIn":    controller.LoggedIn,
+			"CurrentName": controller.CurrentName,
+		}).ParseGlob("templates/*")),
+	}
+	s.Engine.Renderer = t
 
-	store := sessions.NewCookieStore([]byte("secretkey"))
-	s.Engine.Use(sessions.Sessions("wikisession", store))
-	s.Engine.Use(csrf.Middleware(csrf.Options{
-		Secret: "secretkey",
-		ErrorFunc: func(c *gin.Context) {
-			c.String(400, "CSRF token mismach")
-			c.Abort()
-		},
-	}))
-
+	store := session.NewCookieStore([]byte("secretkey"))
+	s.Engine.Use(session.Sessions("wikisession", store))
+	s.Engine.Use(middleware.CSRF())
 	s.Route()
+}
+
+func CSRFToken(c echo.Context) string {
+	return c.Get(middleware.DefaultCSRFConfig.ContextKey).(string)
 }
 
 // New returns server object.
 func New() *Server {
-	r := gin.Default()
-	return &Server{Engine: r}
+	return &Server{Engine: echo.New()}
 }
 
 // Run starts running http server.
-func (s *Server) Run(addr ...string) {
-	s.Engine.Run(addr...)
+func (s *Server) Run(addr string) {
+	s.Engine.Start(addr)
 }
 
 // Route setting router for this wiki.
@@ -79,24 +84,24 @@ func (s *Server) Route() {
 	user := &controller.User{DB: s.db}
 
 	auth := s.Engine.Group("/")
-	auth.Use(controller.AuthRequired())
+	auth.Use(controller.AuthRequired)
 	{
-		auth.GET("/authtest", func(c *gin.Context) {
-			c.String(200, "you're authed")
+		auth.GET("/authtest", func(c echo.Context) error {
+			return c.String(200, "you're authed")
 		})
-		auth.GET("/new", func(c *gin.Context) {
-			c.HTML(200, "new.tmpl", gin.H{
+		auth.GET("/new", func(c echo.Context) error {
+			return c.Render(200, "new.tmpl", echo.Map{
 				"title":   "New: go-wiki",
-				"csrf":    csrf.GetToken(c),
+				"csrf":    CSRFToken(c),
 				"context": c,
 			})
 		})
 		auth.GET("/article/:id/edit", article.Edit)
 		auth.POST("/save", article.Save)
 		auth.POST("/delete", article.Delete)
-		auth.GET("/logout", func(c *gin.Context) {
-			c.HTML(http.StatusOK, "logout.tmpl", gin.H{
-				"csrf":    csrf.GetToken(c),
+		auth.GET("/logout", func(c echo.Context) error {
+			return c.Render(http.StatusOK, "logout.tmpl", echo.Map{
+				"csrf":    CSRFToken(c),
 				"context": c,
 			})
 		})
@@ -105,15 +110,15 @@ func (s *Server) Route() {
 
 	s.Engine.GET("/", article.Root)
 	s.Engine.GET("/article/:id", article.Get)
-	s.Engine.GET("/signup", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "signup.tmpl", gin.H{
-			"csrf": csrf.GetToken(c),
+	s.Engine.GET("/signup", func(c echo.Context) error {
+		return c.Render(http.StatusOK, "signup.tmpl", echo.Map{
+			"csrf": CSRFToken(c),
 		})
 	})
 	s.Engine.POST("/signup", user.SignUp)
-	s.Engine.GET("/login", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "login.tmpl", gin.H{
-			"csrf": csrf.GetToken(c),
+	s.Engine.GET("/login", func(c echo.Context) error {
+		return c.Render(http.StatusOK, "login.tmpl", echo.Map{
+			"csrf": CSRFToken(c),
 		})
 	})
 	s.Engine.POST("/login", user.Login)
