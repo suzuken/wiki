@@ -3,13 +3,14 @@ package controller
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
+	"github.com/gorilla/csrf"
+	"github.com/julienschmidt/httprouter"
 	"github.com/suzuken/wiki/model"
-	csrf "github.com/utrack/gin-csrf"
-
-	"github.com/gin-gonic/gin"
+	"github.com/suzuken/wiki/view"
 )
 
 // Article is controller for requests to articles.
@@ -18,65 +19,67 @@ type Article struct {
 }
 
 // Root indicates / path as top page.
-func (t *Article) Root(c *gin.Context) {
+func (t *Article) Root(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	articles, err := model.ArticlesAll(t.DB)
 	if err != nil {
-		c.String(500, "%s", err)
+		w.WriteHeader(500)
+		io.WriteString(w, fmt.Sprintf("%s", err))
 		return
 	}
-	c.HTML(http.StatusOK, "index.tmpl", gin.H{
+	view.HTML(w, http.StatusOK, "index.tmpl", map[string]interface{}{
 		"title":    "wiki wiki",
 		"articles": articles,
-		"context":  c,
+		"request":  r,
 	})
 }
 
 // Get returns specified article.
-func (t *Article) Get(c *gin.Context) {
-	id := c.Param("id")
+func (t *Article) Get(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	id := params.ByName("id")
 	aid, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		c.String(500, "%s", err)
+		Error(w, err, 500)
 		return
 	}
 	article, err := model.ArticleOne(t.DB, aid)
 	if err != nil {
-		c.String(500, "%s", err)
+		Error(w, err, 500)
 		return
 	}
-	c.HTML(http.StatusOK, "article.tmpl", gin.H{
+	view.HTML(w, http.StatusOK, "article.tmpl", map[string]interface{}{
 		"title":   fmt.Sprintf("%s - go-wiki", article.Title),
 		"article": article,
-		"context": c,
+		"request": r,
 	})
 }
 
 // Edit indicates edit page for certain article.
-func (t *Article) Edit(c *gin.Context) {
-	id := c.Param("id")
+func (t *Article) Edit(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	id := params.ByName("id")
 	aid, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		c.String(500, "%s", err)
+		w.WriteHeader(500)
+		io.WriteString(w, fmt.Sprintf("%s", err))
 		return
 	}
 	article, err := model.ArticleOne(t.DB, aid)
 	if err != nil {
-		c.String(500, "%s", err)
+		Error(w, err, 500)
 		return
 	}
-	c.HTML(http.StatusOK, "edit.tmpl", gin.H{
-		"title":   fmt.Sprintf("%s - go-wiki", article.Title),
-		"article": article,
-		"context": c,
-		"csrf":    csrf.GetToken(c),
+	view.HTML(w, http.StatusOK, "edit.tmpl", map[string]interface{}{
+		"title":          fmt.Sprintf("%s - go-wiki", article.Title),
+		"article":        article,
+		"request":        r,
+		csrf.TemplateTag: csrf.TemplateField(r),
 	})
 }
 
 // New works as endpoint to create new article.
 // If successed, redirect to created one.
-func (t *Article) New(c *gin.Context, m *model.Article) {
+func (t *Article) New(w http.ResponseWriter, r *http.Request, m *model.Article) {
 	var id int64
-	TXHandler(c, t.DB, func(tx *sql.Tx) error {
+	if err := TXHandler(t.DB, func(tx *sql.Tx) error {
 		result, err := m.Insert(tx)
 		if err != nil {
 			return err
@@ -86,65 +89,74 @@ func (t *Article) New(c *gin.Context, m *model.Article) {
 		}
 		id, err = result.LastInsertId()
 		return err
-	})
-	c.Redirect(301, fmt.Sprintf("/article/%d", id))
+	}); err != nil {
+		Error(w, err, 500)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/article/%d", id), 301)
 }
 
 // Update works for updating the specified article.
 // After updating, redirect to one.
-func (t *Article) Update(c *gin.Context, m *model.Article) {
-	TXHandler(c, t.DB, func(tx *sql.Tx) error {
+func (t *Article) Update(w http.ResponseWriter, r *http.Request, m *model.Article) {
+	if err := TXHandler(t.DB, func(tx *sql.Tx) error {
 		if _, err := m.Update(tx); err != nil {
 			return err
 		}
 		return tx.Commit()
-	})
-	c.Redirect(301, fmt.Sprintf("/article/%d", m.ID))
+	}); err != nil {
+		Error(w, err, 500)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/article/%d", m.ID), 301)
 }
 
 // Save is endpoint for updating or creating documents.
 // This accepts form request from browser.
 // If id is specified, dealing with Update.
-func (t *Article) Save(c *gin.Context) {
+func (t *Article) Save(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var article model.Article
-	article.Body = c.PostForm("body")
-	article.Title = c.PostForm("title")
+	article.Body = r.PostFormValue("body")
+	article.Title = r.PostFormValue("title")
 
-	id := c.PostForm("id")
+	id := r.PostFormValue("id")
 	if id == "" {
-		t.New(c, &article)
+		t.New(w, r, &article)
 		return
 	}
 
 	aid, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		c.String(500, "%s", err)
+		Error(w, err, 500)
 		return
 	}
 	article.ID = aid
-	t.Update(c, &article)
+	t.Update(w, r, &article)
 }
 
 // Delete is endpont for deleting the document.
-func (t *Article) Delete(c *gin.Context) {
+func (t *Article) Delete(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	var article model.Article
-	id := c.PostForm("id")
+	id := r.PostFormValue("id")
 	if id == "" {
-		c.Abort()
+		http.Error(w, "id required but not specified", http.StatusBadRequest)
 		return
 	}
 	aid, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
-		c.String(500, "%s", err)
+		Error(w, err, 500)
 		return
 	}
 	article.ID = aid
-	TXHandler(c, t.DB, func(tx *sql.Tx) error {
+	if err := TXHandler(t.DB, func(tx *sql.Tx) error {
 		if _, err := article.Delete(tx); err != nil {
 			return err
 		}
 		return tx.Commit()
-	})
+	}); err != nil {
+		Error(w, err, 500)
+		return
+	}
 
-	c.Redirect(301, "/")
+	http.Redirect(w, r, "/", 301)
 }

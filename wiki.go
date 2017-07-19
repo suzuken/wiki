@@ -1,28 +1,28 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"flag"
+	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 
 	"github.com/suzuken/wiki/controller"
 	"github.com/suzuken/wiki/db"
+	"github.com/suzuken/wiki/view"
 
-	csrf "github.com/utrack/gin-csrf"
-
-	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/gorilla/sessions"
+	"github.com/gorilla/csrf"
+	"github.com/julienschmidt/httprouter"
 )
 
 // Server is whole server implementation for this wiki app.
 // This holds database connection and router settings based on gin.
 type Server struct {
-	db    *sql.DB
-	store sessions.Store
+	db  *sql.DB
+	mux *httprouter.Router
 }
 
 // Close makes the database connection to close.
@@ -41,38 +41,32 @@ func (s *Server) Init(dbconf, env string) {
 	if err != nil {
 		log.Fatalf("db initialization failed: %s", err)
 	}
-	s.db = db
 
-	// NOTE: define helper func to use from templates here.
-	t := template.Must(template.New("").Funcs(template.FuncMap{
+	view.Funcs(template.FuncMap{
 		"LoggedIn":    controller.LoggedIn,
 		"CurrentName": controller.CurrentName,
-	}).ParseGlob("templates/*"))
-	// s.Engine.SetHTMLTemplate(t)
+	})
+	view.Init()
 
-	s.store = sessions.NewCookieStore([]byte("secretkey"))
-	s.mux = http.NewServeMux()
-
-	// s.Engine.Use(csrf.Middleware(csrf.Options{
-	// 	Secret: "secretkey",
-	// 	ErrorFunc: func(c *gin.Context) {
-	// 		c.String(400, "CSRF token mismach")
-	// 		c.Abort()
-	// 	},
-	// }))
-
+	s.db = db
+	s.mux = httprouter.New()
 	s.Route()
 }
 
 // New returns server object.
 func New() *Server {
-	r := gin.Default()
-	return &Server{Engine: r}
+	return &Server{}
 }
 
 // Run starts running http server.
-func (s *Server) Run(addr ...string) {
-	s.Engine.Run(addr...)
+func (s *Server) Run(addr string) {
+	http.ListenAndServe(addr, s.mux)
+}
+
+func Auth(h httprouter.Handle) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		fmt.Fprintf(w, "hello world")
+	}
 }
 
 // Route setting router for this wiki.
@@ -80,47 +74,44 @@ func (s *Server) Route() {
 	article := &controller.Article{DB: s.db}
 	user := &controller.User{DB: s.db}
 
-	auth := s.Engine.Group("/")
-	auth.Use(controller.AuthRequired())
-	{
-		auth.GET("/authtest", func(c *gin.Context) {
-			c.String(200, "you're authed")
-		})
-		auth.GET("/new", func(c *gin.Context) {
-			c.HTML(200, "new.tmpl", gin.H{
-				"title":   "New: go-wiki",
-				"csrf":    csrf.GetToken(c),
-				"context": c,
-			})
-		})
-		auth.GET("/article/:id/edit", article.Edit)
-		auth.POST("/save", article.Save)
-		auth.POST("/delete", article.Delete)
-		auth.GET("/logout", func(c *gin.Context) {
-			c.HTML(http.StatusOK, "logout.tmpl", gin.H{
-				"csrf":    csrf.GetToken(c),
-				"context": c,
-			})
-		})
-		auth.POST("/logout", user.Logout)
-	}
-
-	s.Engine.GET("/", article.Root)
-	s.Engine.GET("/article/:id", article.Get)
-	s.Engine.GET("/signup", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "signup.tmpl", gin.H{
-			"csrf": csrf.GetToken(c),
+	s.mux.GET("/authtest", Auth(func(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
+		w.WriteHeader(200)
+		io.WriteString(w, "your're authed")
+	}))
+	s.mux.GET("/new", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		view.HTML(w, 200, "new.tmpl", map[string]interface{}{
+			"title":          "New: go-wiki",
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"request":        r,
 		})
 	})
-	s.Engine.POST("/signup", user.SignUp)
-	s.Engine.GET("/login", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "login.tmpl", gin.H{
-			"csrf": csrf.GetToken(c),
+	s.mux.GET("/article/:id/edit", article.Edit)
+	s.mux.POST("/save", article.Save)
+	s.mux.POST("/delete", article.Delete)
+	s.mux.GET("/logout", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		view.HTML(w, http.StatusOK, "logout.tmpl", map[string]interface{}{
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"request":        r,
 		})
 	})
-	s.Engine.POST("/login", user.Login)
+	s.mux.POST("/logout", user.Logout)
 
-	s.Engine.Static("/static", "static")
+	s.mux.GET("/", article.Root)
+	s.mux.GET("/article/:id", article.Get)
+	s.mux.GET("/signup", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		view.HTML(w, http.StatusOK, "signup.tmpl", map[string]interface{}{
+			csrf.TemplateTag: csrf.TemplateField(r),
+		})
+	})
+	s.mux.POST("/signup", user.SignUp)
+	s.mux.GET("/login", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+		view.HTML(w, http.StatusOK, "login.tmpl", map[string]interface{}{
+			csrf.TemplateTag: csrf.TemplateField(r),
+		})
+	})
+	s.mux.POST("/login", user.Login)
+
+	s.mux.ServeFiles("/static/*filepath", http.Dir("./static"))
 }
 
 func main() {

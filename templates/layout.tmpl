@@ -8,10 +8,10 @@
 {{ define "global-navigator" }}
 <nav>
     <a href="/">HOME</a> |
-    {{ if LoggedIn .context}}
+    {{ if LoggedIn .request}}
     <a href="/new">NEW ARTICLE</a> |
     <a href="/logout">LOG OUT</a> |
-    Hi, {{ CurrentName .context}}
+    Hi, {{ CurrentName .request}}
     {{else}}
     <a href="/signup">SIGN UP</a> |
     <a href="/login">LOGIN</a>
@@ -20,7 +20,7 @@
 {{end}}
 
 {{ define "csrf-hidden" }}
-<input type="hidden" name="_csrf" value="{{.csrf}}">
+    {{ .csrfField }}
 {{end}}
 
 {{ define "footer" }}
