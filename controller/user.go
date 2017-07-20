@@ -16,7 +16,7 @@ type User struct {
 }
 
 // SignUp makes user signup.
-func (u *User) SignUp(w http.ResponseWriter, r *http.Request) {
+func (u *User) SignUp(w http.ResponseWriter, r *http.Request) error {
 	var m model.User
 	m.Name = r.PostFormValue("name")
 	m.Email = r.PostFormValue("email")
@@ -24,14 +24,12 @@ func (u *User) SignUp(w http.ResponseWriter, r *http.Request) {
 
 	b, err := model.UserExists(u.DB, m.Email)
 	if err != nil {
-		log.Printf("query error: %s", err)
-		http.Error(w, "db error", 500)
-		return
+		return err
 	}
 	if b {
 		w.WriteHeader(200)
 		io.WriteString(w, "given email address is already used.")
-		return
+		return nil
 	}
 
 	if err := TXHandler(u.DB, func(tx *sql.Tx) error {
@@ -40,20 +38,18 @@ func (u *User) SignUp(w http.ResponseWriter, r *http.Request) {
 		}
 		return tx.Commit()
 	}); err != nil {
-		Error(w, err, 500)
-		return
+		return err
 	}
 
 	http.Redirect(w, r, "/", 301)
+	return nil
 }
 
 // Login try login.
-func (u *User) Login(w http.ResponseWriter, r *http.Request) {
+func (u *User) Login(w http.ResponseWriter, r *http.Request) error {
 	m, err := model.Auth(u.DB, r.PostFormValue("email"), r.PostFormValue("password"))
 	if err != nil {
-		log.Printf("auth failed: %s", err)
-		http.Error(w, "auth failed", 500)
-		return
+		return err
 	}
 
 	log.Printf("authed: %#v", m)
@@ -64,16 +60,21 @@ func (u *User) Login(w http.ResponseWriter, r *http.Request) {
 	sess.Values["name"] = m.Name
 	if err := sessions.Save(r, w, sess); err != nil {
 		log.Printf("session can't save: %s", err)
+		return err
 	}
 
 	http.Redirect(w, r, "/", http.StatusFound)
+	return nil
 }
 
 // Logout makes user logged out.
-func (u *User) Logout(w http.ResponseWriter, r *http.Request) {
+func (u *User) Logout(w http.ResponseWriter, r *http.Request) error {
 	sess, _ := sessions.Get(r, "user")
-	sessions.Clear(r, w, sess)
+	if err := sessions.Clear(r, w, sess); err != nil {
+		return err
+	}
 	http.Redirect(w, r, "/", 301)
+	return nil
 }
 
 // LoggedIn returns if current session user is logged in or not.

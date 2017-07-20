@@ -1,28 +1,32 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
+	"errors"
 	"flag"
+	"fmt"
 	"html/template"
 	"io"
 	"log"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/suzuken/wiki/controller"
 	"github.com/suzuken/wiki/db"
+	"github.com/suzuken/wiki/httputil"
 	"github.com/suzuken/wiki/view"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/context"
 	"github.com/gorilla/csrf"
-	"github.com/julienschmidt/httprouter"
 )
 
 // Server is whole server implementation for this wiki app.
 // This holds database connection and router settings based on gin.
 type Server struct {
 	db  *sql.DB
-	mux *httprouter.Router
+	mux *http.ServeMux
 }
 
 // Close makes the database connection to close.
@@ -49,7 +53,6 @@ func (s *Server) Init(dbconf, env string) {
 	view.Init()
 
 	s.db = db
-	s.mux = httprouter.New()
 	s.Route()
 }
 
@@ -64,69 +67,169 @@ func (s *Server) Run(addr string) {
 	http.ListenAndServe(addr, context.ClearHandler(s.mux))
 }
 
-func Auth(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func Auth(h handler) handler {
+	return func(w http.ResponseWriter, r *http.Request) error {
 		if !controller.LoggedIn(r) {
-			http.Error(w, "abort", http.StatusUnauthorized)
-			return
+			return &httputil.HTTPError{Status: http.StatusUnauthorized}
 		}
 		h.ServeHTTP(w, r)
+		return nil
 	}
 }
 
-func AuthParam(h httprouter.Handle) httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		if !controller.LoggedIn(r) {
-			http.Error(w, "abort", http.StatusUnauthorized)
-			return
+func m(method string, h handler) handler {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		if r.Method != method {
+			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
 		}
-		h(w, r, p)
+		h.ServeHTTP(w, r)
+		return nil
 	}
+}
+
+func GET(h handler) handler  { return m("GET", h) }
+func POST(h handler) handler { return m("POST", h) }
+
+type handler func(w http.ResponseWriter, r *http.Request) error
+
+func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	runHandler(w, r, h, handleError)
+}
+
+type errFn func(w http.ResponseWriter, r *http.Request, status int, err error)
+
+func logError(req *http.Request, err error, rv interface{}) {
+	if err != nil {
+		var buf bytes.Buffer
+		fmt.Fprintf(&buf, "Error serving %s: %v\n", req.URL, err)
+		if rv != nil {
+			fmt.Fprintln(&buf, rv)
+			buf.Write(debug.Stack())
+		}
+		log.Print(buf.String())
+	}
+}
+
+type responseBuffer struct {
+	buf    bytes.Buffer
+	status int
+	header http.Header
+}
+
+func (r *responseBuffer) Header() http.Header {
+	if r.header == nil {
+		r.header = make(http.Header)
+	}
+	return r.header
+}
+
+func (r *responseBuffer) Write(b []byte) (int, error) {
+	return r.buf.Write(b)
+}
+
+func (r *responseBuffer) WriteHeader(status int) {
+	r.status = status
+}
+
+func runHandler(w http.ResponseWriter, r *http.Request,
+	fn func(w http.ResponseWriter, r *http.Request) error, errfn errFn) {
+	defer func() {
+		if rv := recover(); rv != nil {
+			err := errors.New("handler panic")
+			logError(r, err, rv)
+			errfn(w, r, http.StatusInternalServerError, err)
+		}
+	}()
+
+	var buf responseBuffer
+	err := fn(&buf, r)
+	if err == nil {
+		buf.WriteTo(w)
+	} else if e, ok := err.(*httputil.HTTPError); ok {
+		if e.Status >= 500 {
+			logError(r, err, nil)
+		}
+		errfn(w, r, e.Status, e.Err)
+	} else {
+		logError(r, err, nil)
+		errfn(w, r, http.StatusInternalServerError, err)
+	}
+}
+
+func errorText(err error) string {
+	return "Internal Server error."
+}
+
+func handleError(w http.ResponseWriter, r *http.Request, status int, err error) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(status)
+	io.WriteString(w, errorText(err))
 }
 
 // Route setting router for this wiki.
 func (s *Server) Route() {
+	mux := http.NewServeMux()
+
 	article := &controller.Article{DB: s.db}
 	user := &controller.User{DB: s.db}
 
-	s.mux.Handler("GET", "/authtest", Auth(func(w http.ResponseWriter, _ *http.Request) {
+	mux.Handle("/authtest", GET(Auth(func(w http.ResponseWriter, _ *http.Request) error {
 		w.WriteHeader(200)
-		io.WriteString(w, "your're authed")
-	}))
-	s.mux.HandlerFunc("GET", "/new", func(w http.ResponseWriter, r *http.Request) {
-		view.HTML(w, 200, "new.tmpl", map[string]interface{}{
+		_, err := io.WriteString(w, "your're authed")
+		return err
+	})))
+	mux.Handle("/new", GET(func(w http.ResponseWriter, r *http.Request) error {
+		return view.HTML(w, 200, "new.tmpl", map[string]interface{}{
 			"title":          "New: go-wiki",
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"request":        r,
 		})
-	})
-	s.mux.GET("/article/:id/edit", AuthParam(article.Edit))
-	s.mux.POST("/save", AuthParam(article.Save))
-	s.mux.POST("/delete", AuthParam(article.Delete))
-	s.mux.HandlerFunc("GET", "/logout", func(w http.ResponseWriter, r *http.Request) {
-		view.HTML(w, http.StatusOK, "logout.tmpl", map[string]interface{}{
-			csrf.TemplateTag: csrf.TemplateField(r),
-			"request":        r,
-		})
-	})
-	s.mux.HandlerFunc("POST", "/logout", user.Logout)
+	}))
+	mux.Handle("/article/", handler(GET(article.Get)))
+	mux.Handle("/article/edit", GET(Auth(article.Edit)))
+	mux.Handle("/save", POST(Auth(article.Save)))
+	mux.Handle("/delete", POST(Auth(article.Delete)))
+	mux.Handle("/logout", handler(func(w http.ResponseWriter, r *http.Request) error {
+		switch r.Method {
+		case "GET":
+			return view.HTML(w, http.StatusOK, "logout.tmpl", map[string]interface{}{
+				csrf.TemplateTag: csrf.TemplateField(r),
+				"request":        r,
+			})
+		case "POST":
+			return user.Logout(w, r)
+		default:
+			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
+		}
+	}))
 
-	s.mux.GET("/", article.Root)
-	s.mux.GET("/article/:id", article.Get)
-	s.mux.HandlerFunc("GET", "/signup", func(w http.ResponseWriter, r *http.Request) {
-		view.HTML(w, http.StatusOK, "signup.tmpl", map[string]interface{}{
-			csrf.TemplateTag: csrf.TemplateField(r),
-		})
-	})
-	s.mux.HandlerFunc("POST", "/signup", user.SignUp)
-	s.mux.HandlerFunc("GET", "/login", func(w http.ResponseWriter, r *http.Request) {
-		view.HTML(w, http.StatusOK, "login.tmpl", map[string]interface{}{
-			csrf.TemplateTag: csrf.TemplateField(r),
-		})
-	})
-	s.mux.HandlerFunc("POST", "/login", user.Login)
-
-	s.mux.ServeFiles("/static/*filepath", http.Dir("./static"))
+	mux.Handle("/", GET(article.Root))
+	mux.Handle("/signup", handler(func(w http.ResponseWriter, r *http.Request) error {
+		switch r.Method {
+		case "GET":
+			return view.HTML(w, http.StatusOK, "signup.tmpl", map[string]interface{}{
+				csrf.TemplateTag: csrf.TemplateField(r),
+			})
+		case "POST":
+			return user.SignUp(w, r)
+		default:
+			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
+		}
+	}))
+	mux.Handle("/login", handler(func(w http.ResponseWriter, r *http.Request) error {
+		switch r.Method {
+		case "GET":
+			return view.HTML(w, http.StatusOK, "login.tmpl", map[string]interface{}{
+				csrf.TemplateTag: csrf.TemplateField(r),
+			})
+		case "POST":
+			return user.Login(w, r)
+		default:
+			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
+		}
+	}))
+	mux.Handle("/static", http.FileServer(http.Dir("./static")))
+	s.mux = mux
 }
 
 func main() {
