@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"flag"
-	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -14,6 +13,7 @@ import (
 	"github.com/suzuken/wiki/view"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/gorilla/context"
 	"github.com/gorilla/csrf"
 	"github.com/julienschmidt/httprouter"
 )
@@ -60,12 +60,27 @@ func New() *Server {
 
 // Run starts running http server.
 func (s *Server) Run(addr string) {
-	http.ListenAndServe(addr, s.mux)
+	log.Printf("start listening on %s", addr)
+	http.ListenAndServe(addr, context.ClearHandler(s.mux))
 }
 
-func Auth(h httprouter.Handle) httprouter.Handle {
-	return func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-		fmt.Fprintf(w, "hello world")
+func Auth(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !controller.LoggedIn(r) {
+			http.Error(w, "abort", http.StatusUnauthorized)
+			return
+		}
+		h.ServeHTTP(w, r)
+	}
+}
+
+func AuthParam(h httprouter.Handle) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		if !controller.LoggedIn(r) {
+			http.Error(w, "abort", http.StatusUnauthorized)
+			return
+		}
+		h(w, r, p)
 	}
 }
 
@@ -74,42 +89,42 @@ func (s *Server) Route() {
 	article := &controller.Article{DB: s.db}
 	user := &controller.User{DB: s.db}
 
-	s.mux.GET("/authtest", Auth(func(w http.ResponseWriter, _ *http.Request, _ httprouter.Params) {
+	s.mux.Handler("GET", "/authtest", Auth(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(200)
 		io.WriteString(w, "your're authed")
 	}))
-	s.mux.GET("/new", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	s.mux.HandlerFunc("GET", "/new", func(w http.ResponseWriter, r *http.Request) {
 		view.HTML(w, 200, "new.tmpl", map[string]interface{}{
 			"title":          "New: go-wiki",
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"request":        r,
 		})
 	})
-	s.mux.GET("/article/:id/edit", article.Edit)
-	s.mux.POST("/save", article.Save)
-	s.mux.POST("/delete", article.Delete)
-	s.mux.GET("/logout", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	s.mux.GET("/article/:id/edit", AuthParam(article.Edit))
+	s.mux.POST("/save", AuthParam(article.Save))
+	s.mux.POST("/delete", AuthParam(article.Delete))
+	s.mux.HandlerFunc("GET", "/logout", func(w http.ResponseWriter, r *http.Request) {
 		view.HTML(w, http.StatusOK, "logout.tmpl", map[string]interface{}{
 			csrf.TemplateTag: csrf.TemplateField(r),
 			"request":        r,
 		})
 	})
-	s.mux.POST("/logout", user.Logout)
+	s.mux.HandlerFunc("POST", "/logout", user.Logout)
 
 	s.mux.GET("/", article.Root)
 	s.mux.GET("/article/:id", article.Get)
-	s.mux.GET("/signup", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	s.mux.HandlerFunc("GET", "/signup", func(w http.ResponseWriter, r *http.Request) {
 		view.HTML(w, http.StatusOK, "signup.tmpl", map[string]interface{}{
 			csrf.TemplateTag: csrf.TemplateField(r),
 		})
 	})
-	s.mux.POST("/signup", user.SignUp)
-	s.mux.GET("/login", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	s.mux.HandlerFunc("POST", "/signup", user.SignUp)
+	s.mux.HandlerFunc("GET", "/login", func(w http.ResponseWriter, r *http.Request) {
 		view.HTML(w, http.StatusOK, "login.tmpl", map[string]interface{}{
 			csrf.TemplateTag: csrf.TemplateField(r),
 		})
 	})
-	s.mux.POST("/login", user.Login)
+	s.mux.HandlerFunc("POST", "/login", user.Login)
 
 	s.mux.ServeFiles("/static/*filepath", http.Dir("./static"))
 }
