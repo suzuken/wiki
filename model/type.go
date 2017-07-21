@@ -15,17 +15,6 @@ type User struct {
 	Updated *time.Time `json:"updated"`
 }
 
-// Mask masks user information
-func (u User) Mask() User {
-	return User{
-		ID:      u.ID,
-		Name:    u.Name,
-		Email:   u.Email,
-		Created: u.Created,
-		Updated: u.Updated,
-	}
-}
-
 // Article returns model object for article.
 type Article struct {
 	ID      int64      `json:"id"`
