@@ -110,27 +110,6 @@ func logError(req *http.Request, err error, rv interface{}) {
 	}
 }
 
-type responseBuffer struct {
-	buf    bytes.Buffer
-	status int
-	header http.Header
-}
-
-func (r *responseBuffer) Header() http.Header {
-	if r.header == nil {
-		r.header = make(http.Header)
-	}
-	return r.header
-}
-
-func (r *responseBuffer) Write(b []byte) (int, error) {
-	return r.buf.Write(b)
-}
-
-func (r *responseBuffer) WriteHeader(status int) {
-	r.status = status
-}
-
 func runHandler(w http.ResponseWriter, r *http.Request,
 	fn func(w http.ResponseWriter, r *http.Request) error, errfn errFn) {
 	defer func() {
@@ -141,7 +120,9 @@ func runHandler(w http.ResponseWriter, r *http.Request,
 		}
 	}()
 
-	var buf responseBuffer
+	r.Body = http.MaxBytesReader(w, r.Body, 2048)
+	r.ParseForm()
+	var buf httputil.ResponseBuffer
 	err := fn(&buf, r)
 	if err == nil {
 		buf.WriteTo(w)
@@ -185,8 +166,8 @@ func (s *Server) Route() {
 			"request":        r,
 		})
 	}))
-	mux.Handle("/article/", handler(GET(article.Get)))
-	mux.Handle("/article/edit", GET(Auth(article.Edit)))
+	mux.Handle("/article/", GET(article.Get))
+	mux.Handle("/article/edit/", GET(Auth(article.Edit)))
 	mux.Handle("/save", POST(Auth(article.Save)))
 	mux.Handle("/delete", POST(Auth(article.Delete)))
 	mux.Handle("/logout", handler(func(w http.ResponseWriter, r *http.Request) error {

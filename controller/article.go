@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/gorilla/csrf"
+	"github.com/pkg/errors"
 	"github.com/suzuken/wiki/httputil"
 	"github.com/suzuken/wiki/model"
 	"github.com/suzuken/wiki/view"
@@ -34,7 +35,7 @@ func (t *Article) Root(w http.ResponseWriter, r *http.Request) error {
 // Get returns specified article.
 func (t *Article) Get(w http.ResponseWriter, r *http.Request) error {
 	var id int64
-	if _, err := fmt.Sscanf(r.URL.Path, "/articles/%d", id); err != nil {
+	if _, err := fmt.Sscanf(r.URL.Path, "/article/%d", &id); err != nil {
 		return err
 	}
 	article, err := model.ArticleOne(t.DB, id)
@@ -52,12 +53,18 @@ func (t *Article) Get(w http.ResponseWriter, r *http.Request) error {
 func (t *Article) Edit(w http.ResponseWriter, r *http.Request) error {
 	var id int64
 	if _, err := fmt.Sscanf(r.URL.Path, "/article/edit/%d", &id); err != nil {
-		log.Printf("article.edit: %s", err)
+		log.Printf("err: %s, %s", r.URL.Path, err)
 		return err
 	}
 	article, err := model.ArticleOne(t.DB, id)
 	if err != nil {
 		return err
+	}
+	if article == (model.Article{}) {
+		return &httputil.HTTPError{
+			Status: http.StatusUnauthorized,
+			Err:    errors.New("non-allowed operation."),
+		}
 	}
 	return view.HTML(w, http.StatusOK, "edit.tmpl", map[string]interface{}{
 		"title":          fmt.Sprintf("%s - go-wiki", article.Title),
