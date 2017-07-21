@@ -2,13 +2,12 @@ package controller
 
 import (
 	"database/sql"
+	"io"
 	"log"
 	"net/http"
-	"time"
 
-	"github.com/gin-gonic/contrib/sessions"
-	"github.com/gin-gonic/gin"
 	"github.com/suzuken/wiki/model"
+	"github.com/suzuken/wiki/sessions"
 )
 
 // User is controller for requests to user.
@@ -17,94 +16,103 @@ type User struct {
 }
 
 // SignUp makes user signup.
-func (u *User) SignUp(c *gin.Context) {
+func (u *User) SignUp(w http.ResponseWriter, r *http.Request) error {
 	var m model.User
-	m.Name = c.PostForm("name")
-	m.Email = c.PostForm("email")
-	password := c.PostForm("password")
+	m.Name = r.PostFormValue("name")
+	m.Email = r.PostFormValue("email")
+	password := r.PostFormValue("password")
 
 	b, err := model.UserExists(u.DB, m.Email)
 	if err != nil {
-		log.Printf("query error: %s", err)
-		c.String(500, "db error")
-		return
+		return err
 	}
 	if b {
-		c.String(200, "given email address is already used.")
-		return
+		w.WriteHeader(200)
+		io.WriteString(w, "given email address is already used.")
+		return nil
 	}
 
-	TXHandler(c, u.DB, func(tx *sql.Tx) error {
+	if err := TXHandler(u.DB, func(tx *sql.Tx) error {
 		if _, err := m.Insert(tx, password); err != nil {
 			return err
 		}
 		return tx.Commit()
-	})
+	}); err != nil {
+		return err
+	}
 
-	c.Redirect(301, "/")
+	http.Redirect(w, r, "/", 301)
+	return nil
 }
 
 // Login try login.
-func (u *User) Login(c *gin.Context) {
-	m, err := model.Auth(u.DB, c.PostForm("email"), c.PostForm("password"))
+func (u *User) Login(w http.ResponseWriter, r *http.Request) error {
+	m, err := model.Auth(u.DB, r.PostFormValue("email"), r.PostFormValue("password"))
 	if err != nil {
-		log.Printf("auth failed: %s", err)
-		c.String(500, "can't auth")
-		return
+		return err
 	}
 
 	log.Printf("authed: %#v", m)
 
-	sess := sessions.Default(c)
-	sess.Set("uid", m.ID)
-	sess.Set("name", m.Name)
-	sess.Set("email", m.Email)
-	sess.Save()
+	sess, _ := sessions.Get(r, "user")
+	sess.Values["id"] = m.ID
+	sess.Values["email"] = m.Email
+	sess.Values["name"] = m.Name
+	if err := sessions.Save(r, w, sess); err != nil {
+		log.Printf("session can't save: %s", err)
+		return err
+	}
 
-	c.Redirect(301, "/")
+	http.Redirect(w, r, "/", http.StatusFound)
+	return nil
 }
 
 // Logout makes user logged out.
-func (u *User) Logout(c *gin.Context) {
-	sess := sessions.Default(c)
-	sess.Options(sessions.Options{MaxAge: -1})
-	sess.Clear()
-	sess.Save()
-
-	// clear cookie
-	http.SetCookie(c.Writer, &http.Cookie{
-		Name:    "wikisession",
-		Value:   "",
-		Path:    "/",
-		Expires: time.Now().AddDate(0, -1, 0),
-	})
-
-	c.Redirect(301, "/")
+func (u *User) Logout(w http.ResponseWriter, r *http.Request) error {
+	sess, _ := sessions.Get(r, "user")
+	if err := sessions.Clear(r, w, sess); err != nil {
+		return err
+	}
+	http.Redirect(w, r, "/", 301)
+	return nil
 }
 
 // LoggedIn returns if current session user is logged in or not.
-func LoggedIn(c *gin.Context) bool {
-	if c == nil {
+func LoggedIn(r *http.Request) bool {
+	if r == nil {
 		return false
 	}
-	sess := sessions.Default(c)
-	return sess.Get("uid") != nil && sess.Get("name") != nil && sess.Get("email") != nil
+	sess, _ := sessions.Get(r, "user")
+	id, ok := sess.Values["id"]
+	if !ok {
+		return false
+	}
+	return id.(int64) != 0
 }
 
 // CurrentName returns current user name who logged in.
-func CurrentName(c *gin.Context) string {
-	if c == nil {
+func CurrentName(r *http.Request) string {
+	if r == nil {
 		return ""
 	}
-	return sessions.Default(c).Get("name").(string)
+	sess, _ := sessions.Get(r, "user")
+	rawname, ok := sess.Values["name"]
+	if !ok {
+		return ""
+	}
+	name, ok := rawname.(string)
+	if !ok {
+		return ""
+	}
+	return name
 }
 
 // AuthRequired returns a handler function which checks
 // if user logged in or not.
-func AuthRequired() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if !LoggedIn(c) {
-			c.AbortWithStatus(401)
+func AuthRequired() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !LoggedIn(r) {
+			http.Error(w, "abort", http.StatusUnauthorized)
 		}
 	}
 }

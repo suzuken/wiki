@@ -1,27 +1,32 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
+	"errors"
 	"flag"
+	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/suzuken/wiki/controller"
 	"github.com/suzuken/wiki/db"
+	"github.com/suzuken/wiki/httputil"
+	"github.com/suzuken/wiki/view"
 
-	csrf "github.com/utrack/gin-csrf"
-
-	"github.com/gin-gonic/contrib/sessions"
-	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/gorilla/context"
+	"github.com/gorilla/csrf"
 )
 
 // Server is whole server implementation for this wiki app.
 // This holds database connection and router settings based on gin.
 type Server struct {
-	db     *sql.DB
-	Engine *gin.Engine
+	db  *sql.DB
+	mux *http.ServeMux
 }
 
 // Close makes the database connection to close.
@@ -40,85 +45,172 @@ func (s *Server) Init(dbconf, env string) {
 	if err != nil {
 		log.Fatalf("db initialization failed: %s", err)
 	}
-	s.db = db
 
-	// NOTE: define helper func to use from templates here.
-	t := template.Must(template.New("").Funcs(template.FuncMap{
+	view.Funcs(template.FuncMap{
 		"LoggedIn":    controller.LoggedIn,
 		"CurrentName": controller.CurrentName,
-	}).ParseGlob("templates/*"))
-	s.Engine.SetHTMLTemplate(t)
+	})
+	view.Init()
 
-	store := sessions.NewCookieStore([]byte("secretkey"))
-	s.Engine.Use(sessions.Sessions("wikisession", store))
-	s.Engine.Use(csrf.Middleware(csrf.Options{
-		Secret: "secretkey",
-		ErrorFunc: func(c *gin.Context) {
-			c.String(400, "CSRF token mismach")
-			c.Abort()
-		},
-	}))
-
+	s.db = db
 	s.Route()
 }
 
 // New returns server object.
 func New() *Server {
-	r := gin.Default()
-	return &Server{Engine: r}
+	return &Server{}
 }
 
 // Run starts running http server.
-func (s *Server) Run(addr ...string) {
-	s.Engine.Run(addr...)
+func (s *Server) Run(addr string) {
+	log.Printf("start listening on %s", addr)
+	http.ListenAndServe(addr, context.ClearHandler(s.mux))
+}
+
+func Auth(h handler) handler {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		if !controller.LoggedIn(r) {
+			return &httputil.HTTPError{Status: http.StatusUnauthorized}
+		}
+		h.ServeHTTP(w, r)
+		return nil
+	}
+}
+
+func m(method string, h handler) handler {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		if r.Method != method {
+			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
+		}
+		h.ServeHTTP(w, r)
+		return nil
+	}
+}
+
+func GET(h handler) handler  { return m("GET", h) }
+func POST(h handler) handler { return m("POST", h) }
+
+type handler func(w http.ResponseWriter, r *http.Request) error
+
+func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	runHandler(w, r, h, handleError)
+}
+
+type errFn func(w http.ResponseWriter, r *http.Request, status int, err error)
+
+func logError(req *http.Request, err error, rv interface{}) {
+	if err != nil {
+		var buf bytes.Buffer
+		fmt.Fprintf(&buf, "Error serving %s: %v\n", req.URL, err)
+		if rv != nil {
+			fmt.Fprintln(&buf, rv)
+			buf.Write(debug.Stack())
+		}
+		log.Print(buf.String())
+	}
+}
+
+func runHandler(w http.ResponseWriter, r *http.Request,
+	fn func(w http.ResponseWriter, r *http.Request) error, errfn errFn) {
+	defer func() {
+		if rv := recover(); rv != nil {
+			err := errors.New("handler panic")
+			logError(r, err, rv)
+			errfn(w, r, http.StatusInternalServerError, err)
+		}
+	}()
+
+	r.Body = http.MaxBytesReader(w, r.Body, 2048)
+	r.ParseForm()
+	var buf httputil.ResponseBuffer
+	err := fn(&buf, r)
+	if err == nil {
+		buf.WriteTo(w)
+	} else if e, ok := err.(*httputil.HTTPError); ok {
+		if e.Status >= 500 {
+			logError(r, err, nil)
+		}
+		errfn(w, r, e.Status, e.Err)
+	} else {
+		logError(r, err, nil)
+		errfn(w, r, http.StatusInternalServerError, err)
+	}
+}
+
+func errorText(err error) string {
+	return "Internal Server error."
+}
+
+func handleError(w http.ResponseWriter, r *http.Request, status int, err error) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(status)
+	io.WriteString(w, errorText(err))
 }
 
 // Route setting router for this wiki.
 func (s *Server) Route() {
+	mux := http.NewServeMux()
+
 	article := &controller.Article{DB: s.db}
 	user := &controller.User{DB: s.db}
 
-	auth := s.Engine.Group("/")
-	auth.Use(controller.AuthRequired())
-	{
-		auth.GET("/authtest", func(c *gin.Context) {
-			c.String(200, "you're authed")
+	mux.Handle("/authtest", GET(Auth(func(w http.ResponseWriter, _ *http.Request) error {
+		w.WriteHeader(200)
+		_, err := io.WriteString(w, "your're authed")
+		return err
+	})))
+	mux.Handle("/new", GET(func(w http.ResponseWriter, r *http.Request) error {
+		return view.HTML(w, 200, "new.tmpl", map[string]interface{}{
+			"title":          "New: go-wiki",
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"request":        r,
 		})
-		auth.GET("/new", func(c *gin.Context) {
-			c.HTML(200, "new.tmpl", gin.H{
-				"title":   "New: go-wiki",
-				"csrf":    csrf.GetToken(c),
-				"context": c,
+	}))
+	mux.Handle("/article/", GET(article.Get))
+	mux.Handle("/article/edit/", GET(Auth(article.Edit)))
+	mux.Handle("/save", POST(Auth(article.Save)))
+	mux.Handle("/delete", POST(Auth(article.Delete)))
+	mux.Handle("/logout", handler(func(w http.ResponseWriter, r *http.Request) error {
+		switch r.Method {
+		case "GET":
+			return view.HTML(w, http.StatusOK, "logout.tmpl", map[string]interface{}{
+				csrf.TemplateTag: csrf.TemplateField(r),
+				"request":        r,
 			})
-		})
-		auth.GET("/article/:id/edit", article.Edit)
-		auth.POST("/save", article.Save)
-		auth.POST("/delete", article.Delete)
-		auth.GET("/logout", func(c *gin.Context) {
-			c.HTML(http.StatusOK, "logout.tmpl", gin.H{
-				"csrf":    csrf.GetToken(c),
-				"context": c,
+		case "POST":
+			return user.Logout(w, r)
+		default:
+			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
+		}
+	}))
+
+	mux.Handle("/", GET(article.Root))
+	mux.Handle("/signup", handler(func(w http.ResponseWriter, r *http.Request) error {
+		switch r.Method {
+		case "GET":
+			return view.HTML(w, http.StatusOK, "signup.tmpl", map[string]interface{}{
+				csrf.TemplateTag: csrf.TemplateField(r),
 			})
-		})
-		auth.POST("/logout", user.Logout)
-	}
-
-	s.Engine.GET("/", article.Root)
-	s.Engine.GET("/article/:id", article.Get)
-	s.Engine.GET("/signup", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "signup.tmpl", gin.H{
-			"csrf": csrf.GetToken(c),
-		})
-	})
-	s.Engine.POST("/signup", user.SignUp)
-	s.Engine.GET("/login", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "login.tmpl", gin.H{
-			"csrf": csrf.GetToken(c),
-		})
-	})
-	s.Engine.POST("/login", user.Login)
-
-	s.Engine.Static("/static", "static")
+		case "POST":
+			return user.SignUp(w, r)
+		default:
+			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
+		}
+	}))
+	mux.Handle("/login", handler(func(w http.ResponseWriter, r *http.Request) error {
+		switch r.Method {
+		case "GET":
+			return view.HTML(w, http.StatusOK, "login.tmpl", map[string]interface{}{
+				csrf.TemplateTag: csrf.TemplateField(r),
+			})
+		case "POST":
+			return user.Login(w, r)
+		default:
+			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
+		}
+	}))
+	mux.Handle("/static", http.FileServer(http.Dir("./static")))
+	s.mux = mux
 }
 
 func main() {
