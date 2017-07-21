@@ -2,13 +2,13 @@ package controller
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/csrf"
-	"github.com/pkg/errors"
 	"github.com/suzuken/wiki/httputil"
 	"github.com/suzuken/wiki/model"
 	"github.com/suzuken/wiki/view"
