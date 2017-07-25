@@ -1,10 +1,9 @@
-package main
+package wiki
 
 import (
 	"bytes"
 	"database/sql"
 	"errors"
-	"flag"
 	"fmt"
 	"html/template"
 	"io"
@@ -19,7 +18,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/context"
-	"github.com/gorilla/csrf"
 )
 
 // Server is whole server implementation for this wiki app.
@@ -154,73 +152,17 @@ func (s *Server) Route() {
 	article := &controller.Article{DB: s.db}
 	user := &controller.User{DB: s.db}
 
-	mux.Handle("/authtest", GET(Auth(func(w http.ResponseWriter, _ *http.Request) error {
-		w.WriteHeader(200)
-		_, err := io.WriteString(w, "your're authed")
-		return err
-	})))
-	mux.Handle("/new", GET(func(w http.ResponseWriter, r *http.Request) error {
-		return view.HTML(w, 200, "new.tmpl", map[string]interface{}{
-			"title":          "New: go-wiki",
-			csrf.TemplateTag: csrf.TemplateField(r),
-			"request":        r,
-		})
-	}))
+	mux.Handle("/authtest", GET(Auth(controller.AuthTestHandler)))
+	mux.Handle("/new", GET(controller.NewArticleHandler))
 	mux.Handle("/article/", GET(article.Get))
 	mux.Handle("/article/edit/", GET(Auth(article.Edit)))
 	mux.Handle("/save", POST(Auth(article.Save)))
 	mux.Handle("/delete", POST(Auth(article.Delete)))
-	mux.Handle("/logout", handler(func(w http.ResponseWriter, r *http.Request) error {
-		switch r.Method {
-		case "GET":
-			return view.HTML(w, http.StatusOK, "logout.tmpl", map[string]interface{}{
-				csrf.TemplateTag: csrf.TemplateField(r),
-				"request":        r,
-			})
-		case "POST":
-			return user.Logout(w, r)
-		default:
-			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
-		}
-	}))
+	mux.Handle("/logout", handler(user.LogoutHandler))
 
 	mux.Handle("/", GET(article.Root))
-	mux.Handle("/signup", handler(func(w http.ResponseWriter, r *http.Request) error {
-		switch r.Method {
-		case "GET":
-			return view.HTML(w, http.StatusOK, "signup.tmpl", map[string]interface{}{
-				csrf.TemplateTag: csrf.TemplateField(r),
-			})
-		case "POST":
-			return user.SignUp(w, r)
-		default:
-			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
-		}
-	}))
-	mux.Handle("/login", handler(func(w http.ResponseWriter, r *http.Request) error {
-		switch r.Method {
-		case "GET":
-			return view.HTML(w, http.StatusOK, "login.tmpl", map[string]interface{}{
-				csrf.TemplateTag: csrf.TemplateField(r),
-			})
-		case "POST":
-			return user.Login(w, r)
-		default:
-			return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
-		}
-	}))
+	mux.Handle("/signup", handler(user.SignupHandler))
+	mux.Handle("/login", handler(user.LoginHandler))
 	mux.Handle("/static", http.FileServer(http.Dir("./static")))
 	s.mux = mux
-}
-
-func main() {
-	var (
-		addr   = flag.String("addr", ":8080", "addr to bind")
-		dbconf = flag.String("dbconf", "dbconfig.yml", "database configuration file.")
-		env    = flag.String("env", "development", "application envirionment (production, development etc.)")
-	)
-	flag.Parse()
-	b := New()
-	b.Init(*dbconf, *env)
-	b.Run(*addr)
 }

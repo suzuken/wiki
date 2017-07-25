@@ -6,8 +6,11 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/gorilla/csrf"
+	"github.com/suzuken/wiki/httputil"
 	"github.com/suzuken/wiki/model"
 	"github.com/suzuken/wiki/sessions"
+	"github.com/suzuken/wiki/view"
 )
 
 // User is controller for requests to user.
@@ -15,8 +18,21 @@ type User struct {
 	DB *sql.DB
 }
 
-// SignUp makes user signup.
-func (u *User) SignUp(w http.ResponseWriter, r *http.Request) error {
+func (u *User) SignupHandler(w http.ResponseWriter, r *http.Request) error {
+	switch r.Method {
+	case "GET":
+		return view.HTML(w, http.StatusOK, "signup.tmpl", map[string]interface{}{
+			csrf.TemplateTag: csrf.TemplateField(r),
+		})
+	case "POST":
+		return u.signUp(w, r)
+	default:
+		return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
+	}
+}
+
+// signUp makes user signup.
+func (u *User) signUp(w http.ResponseWriter, r *http.Request) error {
 	var m model.User
 	m.Name = r.PostFormValue("name")
 	m.Email = r.PostFormValue("email")
@@ -45,8 +61,21 @@ func (u *User) SignUp(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func (u *User) LoginHandler(w http.ResponseWriter, r *http.Request) error {
+	switch r.Method {
+	case "GET":
+		return view.HTML(w, http.StatusOK, "login.tmpl", map[string]interface{}{
+			csrf.TemplateTag: csrf.TemplateField(r),
+		})
+	case "POST":
+		return u.login(w, r)
+	default:
+		return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
+	}
+}
+
 // Login try login.
-func (u *User) Login(w http.ResponseWriter, r *http.Request) error {
+func (u *User) login(w http.ResponseWriter, r *http.Request) error {
 	m, err := model.Auth(u.DB, r.PostFormValue("email"), r.PostFormValue("password"))
 	if err != nil {
 		return err
@@ -67,8 +96,22 @@ func (u *User) Login(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// Logout makes user logged out.
-func (u *User) Logout(w http.ResponseWriter, r *http.Request) error {
+func (u *User) LogoutHandler(w http.ResponseWriter, r *http.Request) error {
+	switch r.Method {
+	case "GET":
+		return view.HTML(w, http.StatusOK, "logout.tmpl", map[string]interface{}{
+			csrf.TemplateTag: csrf.TemplateField(r),
+			"request":        r,
+		})
+	case "POST":
+		return u.logout(w, r)
+	default:
+		return &httputil.HTTPError{Status: http.StatusMethodNotAllowed}
+	}
+}
+
+// logout makes user logged out.
+func (u *User) logout(w http.ResponseWriter, r *http.Request) error {
 	sess, _ := sessions.Get(r, "user")
 	if err := sessions.Clear(r, w, sess); err != nil {
 		return err
