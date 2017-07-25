@@ -15,7 +15,9 @@
         <div id="article">
             {{ .article.Body }}
         </div>
+        {{ if LoggedIn .request}}
         <p><a href="/article/edit/{{.article.ID}}">edit this</a></p>
+        {{end}}
     </article>
     <aside>
         <h2></h2>
