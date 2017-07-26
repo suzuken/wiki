@@ -21,6 +21,10 @@ type Article struct {
 
 // Root indicates / path as top page.
 func (t *Article) Root(w http.ResponseWriter, r *http.Request) error {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return nil
+	}
 	articles, err := model.ArticlesAll(t.DB)
 	if err != nil {
 		return err
