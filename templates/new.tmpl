@@ -10,15 +10,15 @@
         <article>
             <form action="/save" method="POST">
                 {{ template "csrf-hidden" . }}
-                <input type="text" name="title">
-                <textarea id="" name="body" cols="30" rows="10">
-                </textarea>
-                <input type="submit" value="save">
+                <div class="form-group">
+                    <label for="title">Title</label>
+                    <input class="form-control" type="text" name="title">
+                </div>
+                <label for="body">Body</label>
+                <textarea class="form-control" name="body" cols="30" rows="10"></textarea>
+                <button class="btn btn-default" type="submit" value="save">Submit</button>
             </form>
         </article>
-        <aside>
-            <h2></h2>
-        </aside>
         {{ template "footer" .}}
     </div>
 </body>
