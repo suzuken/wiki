@@ -8,13 +8,16 @@
             <h1>Login</h1>
         </header>
         <article>
-            <form action="/login" method="POST">
+            <form class="form-inline" action="/login" method="POST">
                 {{ template "csrf-hidden" . }}
-                <label for="email">email</label>
-                <input type="text" name="email" value="">
-                <label for="password">password</label>
-                <input type="password" name="password" value="">
-                <input type="submit" value="login">
+                <div class="form-group">
+                    <label for="email">email</label>
+                    <input class="form-control" type="text" name="email" value="">
+                <div class="form-group">
+                    <label for="password">password</label>
+                    <input class="form-control" type="password" name="password" value="">
+                </div>
+                <button class="btn btn-default" type="submit" value="login">Login</button>
             </form>
         </article>
         {{ template "footer" .}}
