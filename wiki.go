@@ -12,6 +12,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/context"
+	"github.com/gorilla/csrf"
 )
 
 // Server is whole server implementation for this wiki app.
@@ -53,10 +54,17 @@ func New() *Server {
 	return &Server{}
 }
 
+// csrfProtectKey should have 32 byte length.
+var csrfProtectKey = []byte("32-byte-long-auth-key")
+
 // Run starts running http server.
 func (s *Server) Run(addr string) {
 	log.Printf("start listening on %s", addr)
-	http.ListenAndServe(addr, context.ClearHandler(s.mux))
+
+	// NOTE: when you serve on TLS, make csrf.Secure(true)
+	CSRF := csrf.Protect(
+		csrfProtectKey, csrf.Secure(false))
+	http.ListenAndServe(addr, context.ClearHandler(CSRF(s.mux)))
 }
 
 // Route setting router for this wiki.

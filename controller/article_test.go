@@ -30,3 +30,8 @@ func TestNotfound(t *testing.T) {
 		t.Errorf("want %d, got %d", http.StatusNotFound, status)
 	}
 }
+
+func TestCSRFProtection(t *testing.T) {
+	// POST to article
+	// maybe block
+}
