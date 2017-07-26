@@ -29,7 +29,7 @@ func (s *Server) Close() error {
 
 // Init initialize server state. Connecting to database, compiling templates,
 // and settings router.
-func (s *Server) Init(dbconf, env string) {
+func (s *Server) Init(dbconf, env string, debug bool) {
 	cs, err := db.NewConfigsFromFile(dbconf)
 	if err != nil {
 		log.Fatalf("cannot open database configuration. exit. %s", err)
@@ -39,11 +39,11 @@ func (s *Server) Init(dbconf, env string) {
 		log.Fatalf("db initialization failed: %s", err)
 	}
 
-	view.Funcs(template.FuncMap{
+	// In debug mode, we compile templates on every request.
+	view.Init(template.FuncMap{
 		"LoggedIn":    controller.LoggedIn,
 		"CurrentName": controller.CurrentName,
-	})
-	view.Init()
+	}, debug)
 
 	s.db = db
 	s.Route()

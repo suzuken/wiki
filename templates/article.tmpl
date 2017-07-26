@@ -2,26 +2,25 @@
 <html lang="en">
 {{ template "header" . }}
 <body>
-    <header>
-        <h1>go-wiki</h1>
-    </header>
     {{ template "global-navigator" . }}
-    <article>
+    <div class="container">
         <header>
-            <h2>{{ .article.Title }}</h2>
-            <p>posted on today {{.article.Created}}</p>
-            <p>updated {{.article.Updated}}</p>
+            <h1>go-wiki</h1>
         </header>
-        <div id="article">
-            {{ .article.Body }}
-        </div>
-        {{ if LoggedIn .request}}
-        <p><a href="/article/edit/{{.article.ID}}">edit this</a></p>
-        {{end}}
-    </article>
-    <aside>
-        <h2></h2>
-    </aside>
+        <article>
+            <header>
+                <h2>{{ .article.Title }}</h2>
+                <p>posted on today {{.article.Created}}</p>
+                <p>updated {{.article.Updated}}</p>
+            </header>
+            <div id="article">
+                {{ .article.Body }}
+            </div>
+            {{ if LoggedIn .request}}
+            <p><a href="/article/edit/{{.article.ID}}">edit this</a></p>
+            {{end}}
+        </article>
     {{ template "footer" .}}
+    </div>
 </body>
 </html>
