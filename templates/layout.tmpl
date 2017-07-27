@@ -44,3 +44,12 @@
     <p>wiki created by <a href="https://github.com/suzuken">@suzuken</a></p>
 </footer>
 {{end}}
+
+{{ define "flash" }}
+    {{ range Flash .request .writer }}
+    <ul>
+        <li>{{.}}</li>
+    </ul>
+    {{else}}
+    {{end}}
+{{end}}

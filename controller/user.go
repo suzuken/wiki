@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/gorilla/csrf"
 	"github.com/suzuken/wiki/httputil"
 	"github.com/suzuken/wiki/model"
 	"github.com/suzuken/wiki/sessions"
@@ -21,9 +20,7 @@ type User struct {
 func (u *User) SignupHandler(w http.ResponseWriter, r *http.Request) error {
 	switch r.Method {
 	case "GET":
-		return view.HTML(w, http.StatusOK, "signup.tmpl", map[string]interface{}{
-			csrf.TemplateTag: csrf.TemplateField(r),
-		})
+		return view.Default(w, r, http.StatusOK, "signup.tmpl", nil)
 	case "POST":
 		return u.signUp(w, r)
 	default:
@@ -64,9 +61,7 @@ func (u *User) signUp(w http.ResponseWriter, r *http.Request) error {
 func (u *User) LoginHandler(w http.ResponseWriter, r *http.Request) error {
 	switch r.Method {
 	case "GET":
-		return view.HTML(w, http.StatusOK, "login.tmpl", map[string]interface{}{
-			csrf.TemplateTag: csrf.TemplateField(r),
-		})
+		return view.Default(w, r, http.StatusOK, "login.tmpl", nil)
 	case "POST":
 		return u.login(w, r)
 	default:
@@ -78,7 +73,15 @@ func (u *User) LoginHandler(w http.ResponseWriter, r *http.Request) error {
 func (u *User) login(w http.ResponseWriter, r *http.Request) error {
 	m, err := model.Auth(u.DB, r.PostFormValue("email"), r.PostFormValue("password"))
 	if err != nil {
-		return err
+		log.Printf("/login: login failed: %s", err)
+		sess, _ := sessions.Get(r, "user")
+		sess.AddFlash("login failed.")
+		if err := sessions.Save(r, w, sess); err != nil {
+			log.Printf("/login: save session failed: %s", err)
+			return err
+		}
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return nil
 	}
 
 	log.Printf("authed: %#v", m)
@@ -99,10 +102,7 @@ func (u *User) login(w http.ResponseWriter, r *http.Request) error {
 func (u *User) LogoutHandler(w http.ResponseWriter, r *http.Request) error {
 	switch r.Method {
 	case "GET":
-		return view.HTML(w, http.StatusOK, "logout.tmpl", map[string]interface{}{
-			csrf.TemplateTag: csrf.TemplateField(r),
-			"request":        r,
-		})
+		return view.Default(w, r, http.StatusOK, "logout.tmpl", nil)
 	case "POST":
 		return u.logout(w, r)
 	default:
@@ -148,6 +148,35 @@ func CurrentName(r *http.Request) string {
 		return ""
 	}
 	return name
+}
+
+// Flash returns flash message
+func Flash(r *http.Request, w http.ResponseWriter) []string {
+	if r == nil {
+		return nil
+	}
+	sess, err := sessions.Get(r, "user")
+	if err != nil {
+		log.Printf("flash: get session failed: %s", err)
+		return nil
+	}
+	flashes := sess.Flashes()
+	if len(flashes) == 0 {
+		log.Printf("no flash message: %v", flashes)
+		return nil
+	}
+	sess.Save(r, w)
+	log.Printf("flash!: %#v", flashes)
+	messages := make([]string, 0, len(flashes))
+	// flash messages may be multiple
+	for _, m := range flashes {
+		mm, ok := m.(string)
+		if !ok {
+			continue
+		}
+		messages = append(messages, mm)
+	}
+	return messages
 }
 
 // AuthRequired returns a handler function which checks

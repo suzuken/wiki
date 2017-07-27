@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/csrf"
 	"github.com/suzuken/wiki/httputil"
 	"github.com/suzuken/wiki/model"
 	"github.com/suzuken/wiki/view"
@@ -29,10 +28,9 @@ func (t *Article) Root(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	return view.HTML(w, http.StatusOK, "index.tmpl", map[string]interface{}{
-		"title":    "wiki wiki",
+	return view.Default(w, r, http.StatusOK, "index.tmpl", map[string]interface{}{
+		"title":    "TOP - wiki",
 		"articles": articles,
-		"request":  r,
 	})
 }
 
@@ -46,10 +44,9 @@ func (t *Article) Get(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	return view.HTML(w, http.StatusOK, "article.tmpl", map[string]interface{}{
+	return view.Default(w, r, http.StatusOK, "article.tmpl", map[string]interface{}{
 		"title":   fmt.Sprintf("%s - go-wiki", article.Title),
 		"article": article,
-		"request": r,
 	})
 }
 
@@ -70,11 +67,9 @@ func (t *Article) Edit(w http.ResponseWriter, r *http.Request) error {
 			Err:    errors.New("non-allowed operation."),
 		}
 	}
-	return view.HTML(w, http.StatusOK, "edit.tmpl", map[string]interface{}{
-		"title":          fmt.Sprintf("%s - go-wiki", article.Title),
-		"article":        article,
-		"request":        r,
-		csrf.TemplateTag: csrf.TemplateField(r),
+	return view.Default(w, r, http.StatusOK, "edit.tmpl", map[string]interface{}{
+		"title":   fmt.Sprintf("%s - go-wiki", article.Title),
+		"article": article,
 	})
 }
 

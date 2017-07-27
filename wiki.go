@@ -43,6 +43,7 @@ func (s *Server) Init(dbconf, env string, debug bool) {
 	view.Init(template.FuncMap{
 		"LoggedIn":    controller.LoggedIn,
 		"CurrentName": controller.CurrentName,
+		"Flash":       controller.Flash,
 	}, debug)
 
 	s.db = db
