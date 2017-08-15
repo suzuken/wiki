@@ -4,12 +4,12 @@ Example implementation of wiki.
 
 ## How to run
 
-    go get github.com/suzuken/wiki
+    go get github.com/suzuken/wiki/cmd/wiki
     wiki
 
 or
 
-    go run wiki.go
+    make run
 
 ## Requirements
 
