@@ -1,0 +1,9 @@
+db:
+  build: .
+  container_name: wiki
+  command: mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_general_ci
+  environment:
+    MYSQL_ROOT_PASSWORD: password
+    MYSQL_DATABASE: wiki
+  ports:
+  - "3306:3306"
