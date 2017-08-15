@@ -7,6 +7,9 @@ deps:
 	which sql-migrate || go get github.com/rubenv/sql-migrate/...
 	which scaneo || go get github.com/variadico/scaneo
 
+run:
+	go run ./cmd/wiki/wiki.go
+
 test:
 	go test -v ./...
 
