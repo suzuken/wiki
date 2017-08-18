@@ -1,54 +1,64 @@
 package view
 
 import (
-	"html/template"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 
 	"github.com/gorilla/csrf"
+	"github.com/mattn/go-slim"
 )
 
 var executor TemplateExecutor
 
-func Init(funcs template.FuncMap, debug bool) {
-	if debug {
-		executor = DebugTemplateExecutor{
-			Glob:  "templates/*",
-			Funcs: funcs,
-		}
-		return
+func Init(funcs slim.Funcs) {
+	matches, err := filepath.Glob("/Users/suzuken/src/github.com/suzuken/wiki/slimtemplates/*.tmpl")
+	if err != nil {
+		panic(err)
 	}
+	fmt.Printf("matches = %+v\n", matches)
+	templates := make(map[string]*slim.Template)
 
+	for _, m := range matches {
+		tmpl, err := slim.ParseFile(m)
+		if err != nil {
+			panic(err)
+		}
+		tmpl.FuncMap(funcs)
+		templates[m] = tmpl
+	}
+	fmt.Printf("templates = %+v\n", templates)
 	executor = CachedTemplateExecutor{
-		Template: template.Must(template.New("").Funcs(funcs).ParseGlob("templates/*")),
+		Template: templates,
 	}
 }
 
 type TemplateExecutor interface {
-	ExecuteTemplate(w io.Writer, name string, data interface{}) error
-}
-
-type DebugTemplateExecutor struct {
-	Glob  string
-	Funcs template.FuncMap
-}
-
-func (e DebugTemplateExecutor) ExecuteTemplate(w io.Writer, name string, data interface{}) error {
-	return template.Must(template.New("").Funcs(e.Funcs).ParseGlob(e.Glob)).ExecuteTemplate(w, name, data)
+	Execute(w io.Writer, name string, data interface{}) error
 }
 
 type CachedTemplateExecutor struct {
-	Template *template.Template
+	Template map[string]*slim.Template
 }
 
-func (e CachedTemplateExecutor) ExecuteTemplate(w io.Writer, name string, data interface{}) error {
-	return e.Template.ExecuteTemplate(w, name, data)
+func (e CachedTemplateExecutor) Execute(w io.Writer, name string, data interface{}) error {
+	tmpl, ok := e.Template[name]
+	if !ok {
+		return errors.New("template not found")
+	}
+	return tmpl.Execute(w, data)
+}
+
+func Execute(w io.Writer, name string, data map[string]interface{}) error {
+	return executor.Execute(w, name, data)
 }
 
 // HTML render view
 func HTML(w http.ResponseWriter, status int, name string, data map[string]interface{}) error {
 	w.WriteHeader(status)
-	return executor.ExecuteTemplate(w, name, data)
+	return executor.Execute(w, name, data)
 }
 
 // Default is shorthands for rendering template.
