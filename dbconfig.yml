@@ -10,10 +10,10 @@
 # see: http://dsas.blog.klab.org/archives/52191467.html
 development:
   dialect: mysql
-  datasource: root:password@tcp(localhost:3306)/wiki?parseTime=true&collation=utf8_general_ci&interpolateParams=true
+  datasource: root:password@tcp(localhost:3306)/wiki?parseTime=true&collation=utf8mb4_general_ci&interpolateParams=true
   dir: migrations
 
 test:
   dialect: mysql
-  datasource: root:password@tcp(localhost:3306)/test-wiki?parseTime=true&collation=utf8_general_ci&interpolateParams=true
+  datasource: root:password@tcp(localhost:3306)/test-wiki?parseTime=true&collation=utf8mb4_general_ci&interpolateParams=true
   dir: migrations
