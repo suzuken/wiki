@@ -16,7 +16,7 @@ import (
 )
 
 // Server is whole server implementation for this wiki app.
-// This holds database connection and router settings based on gin.
+// This holds database connection and router settings.
 type Server struct {
 	db  *sql.DB
 	mux *http.ServeMux
