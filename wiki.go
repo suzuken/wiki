@@ -16,10 +16,10 @@ import (
 )
 
 // Server is whole server implementation for this wiki app.
-// This holds database connection and router settings based on gin.
+// This holds database connection and router settings.
 type Server struct {
-	db  *sql.DB
-	mux *http.ServeMux
+	db      *sql.DB
+	handler http.Handler
 }
 
 // Close makes the database connection to close.
@@ -65,7 +65,7 @@ func (s *Server) Run(addr string) {
 	// NOTE: when you serve on TLS, make csrf.Secure(true)
 	CSRF := csrf.Protect(
 		csrfProtectKey, csrf.Secure(false))
-	http.ListenAndServe(addr, context.ClearHandler(CSRF(s.mux)))
+	http.ListenAndServe(addr, context.ClearHandler(CSRF(s.handler)))
 }
 
 // Route setting router for this wiki.
@@ -87,5 +87,5 @@ func (s *Server) Route() {
 	mux.Handle("/signup", handler(user.SignupHandler))
 	mux.Handle("/login", handler(user.LoginHandler))
 	mux.Handle("/static", http.FileServer(http.Dir("./static")))
-	s.mux = mux
+	s.handler = mux
 }
